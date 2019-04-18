@@ -1,7 +1,7 @@
 {
   "name": "mongodb-simple-query-syntax",
   "version": "0.0.0",
-  "description": "A simplified json syntax to generate mongodb query json",
+  "description": "A simplified syntax to generate mongodb query json",
   "main": "index.js",
   "scripts": {
     "test": "cd test; npm i; npm run test"
