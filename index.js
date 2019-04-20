@@ -354,8 +354,10 @@ Tracer.prototype.getAutocompleteType = function (cursor, log, detail) {
         let middle = newContent.slice(start, end+1)
         let tail = newContent.slice(end+1,)
         if (middle) {
-          let toPrint =  `${head}%c${middle}%c${tail}`
-          console.log(toPrint, "background-color:#41ff418c;", "")
+          if (log) {
+            let toPrint =  `${head}%c${middle}%c${tail}`
+            console.log(toPrint, "background-color:#41ff418c;", "")
+          }
           output.printKey = { head, middle, tail }
         } else {
           if (log) {

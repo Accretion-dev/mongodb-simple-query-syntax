@@ -18,10 +18,24 @@
           </template>
           <template v-else>
             <template v-if="typeof(debug.output.print)==='string'">
-              <pre ref="pre" @click="onClick"  contenteditable="true">{{debug.output.print}}</pre>
+              <pre ref="pre"
+                  @click="onClick"
+                   @keydown.right="onMove"
+                   @keydown.left="onMove"
+                   @keydown.up="onMove"
+                   @keydown.down="onMove"
+                  contenteditable="true"
+              >{{debug.output.print}}</pre>
             </template>
             <template v-else>
-              <pre ref="pre" @click="onClick" contenteditable="true">{{debug.output.print.head}}<span class='highlight'>{{debug.output.print.middle}}</span>{{debug.output.print.tail}}</pre>
+              <pre ref="pre"
+                   @click="onClick"
+                   @keydown.right="onMove"
+                   @keydown.left="onMove"
+                   @keydown.up="onMove"
+                   @keydown.down="onMove"
+                   contenteditable="true"
+              >{{debug.output.print.head}}<span class='highlight'>{{debug.output.print.middle}}</span>{{debug.output.print.tail}}</pre>
             </template>
             <template v-if="debug.output.printKey">
               <template v-if="typeof(debug.output.printKey)==='string'">
@@ -43,6 +57,8 @@ const clsPrefix = 'vue-selenium-unittest'
 const path = require('path')
 const {SyntaxError, parse, Tracer} = require('../../index.js')
 import lodash from 'lodash'
+import equal from 'deep-equal'
+import { diff, addedDiff, deletedDiff, updatedDiff, detailedDiff } from 'deep-object-diff'
 
 let todo, todoObj
 todo = `
@@ -57,6 +73,8 @@ todo = `
   simple|level1|level2|level3 : s123 ||
   simple|level1|level2| : s12$ ||
   simple|level1|level2| : ||
+  ~not|level|test| : ||
+  (foo:foo && bar:bar || ~foobar:foobar && barfoo:barfoo) ||
   ( (unfinished0) unfinished1) ||
   'unfinished2' ||
   unfinished3: {
@@ -77,12 +95,17 @@ todoObj = {$or: [
     {'tags.tag_name': 'good'},
     {$not: {'tags.time': {$lt: '2018'}}},
   ]},
-  {'tags.tag_name':{$in:['foo', 'bar', 'a\'b']}},
+  {'tags.tag_name':{$in:['foo', 'bar', 'a\'b', {foo:'bar'}]}},
   {halftype: null},
   {flags:{$:'flag'}},
   {simple:{$level1:{$level2:{$level3: 's123'}}}},
   {simple:{$level1:{$level2:{$: 's12$'}}}},
   {simple:{$level1:{$level2:{$: null}}}},
+  {$not:{not: {$level:{$test:{$: null}}}}},
+  {$or: [
+       {$and: [{foo:"foo"}, {bar:"bar"}]},
+       {$and: [{$not: {foobar:"foobar"}}, {barfoo: "barfoo"}]}
+  ]},
   {$and: ['unfinished0', 'unfinished1']},
   'unfinished2',
   {unfinished3: {
@@ -104,6 +127,7 @@ export default {
       clsPrefix,
       lodash,
       cursor: 0,
+      timer:{move: null},
     }
   },
   computed: {
@@ -112,6 +136,11 @@ export default {
       let result, output
       try {
         result = parse(todo, {tracer})
+        if (!equal(result, todoObj)) {
+          console.log({expect: todoObj, actual: result})
+          console.log(diff(result, todoObj))
+          throw Error('parse error')
+        }
         output = tracer.getAutocompleteType(this.cursor)
       } catch (e) {
         return {error: e}
@@ -139,6 +168,13 @@ export default {
     }
   },
   methods: {
+    onMove () {
+      // will have offset of 1 when move from (typeof(print)==='string') to {head, middle, tail}, will not fix it
+      clearTimeout(this.timer.move)
+      this.timer.move = setTimeout(() => {
+        this.onClick()
+      }, 500)
+    },
     onClick (event) {
       let sel = window.getSelection()
       let offset = sel.focusOffset
@@ -148,17 +184,16 @@ export default {
         this.cursor = offset
       } else {
         let index = Array.from(nodes).findIndex(_ => _===sel.focusNode)
-        console.log(index)
         if (index === 0) {
           this.cursor = offset
         } else if (index === 2){
           this.cursor = offset + nodes[0].data.length + nodes[1].innerText.length - 2
         } else {
           let text = sel.focusNode.data
-          if (text.indexOf('◼️')>=0) {
+          if (text.slice(0,sel.focusOffset).indexOf('◼️')>=0) {
             this.cursor = offset + nodes[0].data.length - 2
           } else {
-            this.cursor = offset + nodes[0].data.length - 1
+            this.cursor = offset + nodes[0].data.length
           }
         }
       }
