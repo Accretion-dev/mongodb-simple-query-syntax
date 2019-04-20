@@ -1,11 +1,119 @@
 const path = require('path')
 let {SyntaxError, parse} = require('./mongodb-simple-query-syntax.js')
 
-function Tracer ({content, full, simple, result}) {
+let demoStruct = {
+  description: 'Test for all kinds of data type',
+  type: 'table',
+  fields: {
+    string: { description:'string', type:'string' },
+    number: { description:'number', type:'number' },
+    date: { description:'date', type:'date' },
+    array_number: { description: '[number]', array: true, type:'number'},
+    array_string: { description: '[strin]', array: true, type:'string'},
+    array_date: { description: '[date]', array: true, type:'date'},
+    array_unknown: { description:'[?]', array: true },
+    array_object_unknown: { description:'[{?}]', array: true, type:'object' },
+    object_unknown: { description:'{?}', type:'object' },
+    object: {
+      description:'{...}',
+      type:'object' ,
+      fields: {
+        string: { description:'{string}', type:'string' },
+        number: { description:'{number}', type:'number' },
+        date: { description:'{date}', type:'date' },
+        array_number: { description: '{[number]}', array: true, type:'number'},
+        array_string: { description: '{[string]}', array: true, type:'string'},
+        array_date: { description: '{[date]}', array: true, type:'date'},
+        array_unknown: { description:'{[?]}', array: true },
+        array_object_unknown: { description:'{[{?}]}', array: true, type:'object' },
+        object_unknown: { description:'{{?}}', type:'object' },
+        object: {
+          description:'{{...}}',
+          type:'object' ,
+          fields: {
+            string: { description:'{{string}}', type:'string' },
+            number: { description:'{{number}}', type:'number' },
+            date: { description:'{{date}}', type:'date' },
+            array_number: { description: '{{[number]}}', array: true, type:'number'},
+            array_string: { description: '{{[string]}}', array: true, type:'string'},
+            array_date: { description: '{{[date]}}', array: true, type:'date'},
+            array_unknown: { description:'{{[?]}}', array: true },
+            array_object_unknown: { description:'{{[{?}]}}', array: true, type:'object' },
+            object_unknown: { description:'{{{?}}}', type:'object' },
+          }
+        },
+        array: {
+          description:'{[{...}]}',
+          array: true,
+          type: 'object',
+          fields: {
+            string: { description:'{[{string}]}', type:'string' },
+            number: { description:'{[{number}]}', type:'number' },
+            date: { description:'{[{date}]}', type:'date' },
+            array_number: { description: '{[{[number]}]}', array: true, type:'number'},
+            array_string: { description: '{[{[string]}]}', array: true, type:'string'},
+            array_date: { description: '{[{[date]}]}', array: true, type:'date'},
+            array_unknown: { description:'{[[?]]}', array: true},
+            array_object_unknown: { description:'{[[{?}]]}', array: true, type:'object' },
+            object_unknown: { description:'{[{{?}}]}', type:'object' },
+            object: {
+              description:'{[{{...}}]}',
+              type:'object' ,
+              fields: {
+                string: { description:'{[{{stirng}}]}', type:'string' },
+                number: { description:'{[{{number}}]}', type:'number' },
+                date: { description:'{[{{date}}]}', type:'date' },
+                array_number: { description: '{[{{[number]}}]}', array: true, type:'number'},
+                array_string: { description: '{[{{[string]}}]}', array: true, type:'string'},
+                array_date: { description: '[{{[date]}}]', array: true, type:'date'},
+                array_unknown: { description:'[{{[?]}}]', array: true,},
+                array_object_unknown: { description:'[{{[{?}]}}]', array: true, type:'object' },
+                object_unknown: { description:'{[{{[{?}]}}]}', type:'object' },
+              }
+            },
+          }
+        },
+      }
+    },
+    array: {
+      description:'[{...}]',
+      array: true,
+      type: 'object',
+      fields: {
+        string: { description:'[{string}]', type:'string' },
+        number: { description:'[{number}]', type:'number' },
+        date: { description:'[{date}]', type:'date' },
+        array_number: { description: '[{[number]}]', array: true, type:'number'},
+        array_string: { description: '[{[string]}]', array: true, type:'string'},
+        array_date: { description: '[{[date]}]', array: true, type:'date'},
+        array_unknown: { description:'[[?]]', array: true },
+        array_object_unknown: { description:'[[{?}]]', array: true, type:'object' },
+        object_unknown: { description:'[{{}}]', type:'object' },
+        object: {
+          description:'[{{...}}]',
+          type:'object' ,
+          fields: {
+            string: { description:'[{{stirng}}]', type:'string' },
+            number: { description:'[{{number}}]', type:'number' },
+            date: { description:'[{{date}}]', type:'date' },
+            array_number: { description: '[{{[number]}}]', array: true, type:'number'},
+            array_string: { description: '[{{[string]}}]', array: true, type:'string'},
+            array_date: { description: '[{{[date]}}]', array: true, type:'date'},
+            array_unknown: { description: '[{{[?]}}]', array: true},
+            array_object_unknown: { description: '[{{[{?}]}}]', array: true, type:'object'},
+            object_unknown: { description:'[{{{?}}}]', type: 'object' },
+          },
+        },
+      },
+    },
+  }
+}
+
+function Tracer ({content, logFull, logSimple}) {
   this.level = 0
   this.history = []
-  this.full = full
-  this.simple = simple
+  this.logFull = logFull
+  this.logSimple = logSimple
   if (content === undefined) {
     throw Error('should give content')
   }
@@ -29,7 +137,7 @@ Tracer.prototype.formatInt = function (int, width) {
     return " ".repeat(width - digit) + String(rawint)
   }
 }
-Tracer.prototype.getAutocompleteType = function (cursor, debug, detail) {
+Tracer.prototype.getAutocompleteType = function (cursor, log, detail) {
   let length = this.content.lenth
   if (cursor<0 || cursor > length) throw Error(`bad cursor position: should be within [0, ${length}]`)
 
@@ -181,7 +289,7 @@ Tracer.prototype.getAutocompleteType = function (cursor, debug, detail) {
         extract:String(value.result), // string
         valueType: value.type,
         value,
-        stateStack
+        stateStack,
       }
       break
     } else if (type === 'Object') {
@@ -190,8 +298,9 @@ Tracer.prototype.getAutocompleteType = function (cursor, debug, detail) {
         complete: null,
         start,
         end,
-        value,
-        stateStack
+        value: each.result,
+        valueType: 'object',
+        stateStack,
       }
       break
     } else if (type === 'Array') {
@@ -200,85 +309,83 @@ Tracer.prototype.getAutocompleteType = function (cursor, debug, detail) {
         complete: null,
         start,
         end,
-        value,
-        stateStack
+        value: each.result,
+        valueType: 'array',
+        stateStack,
       }
       break
     }
   }
 
-  let debugInfo = {}
-  if (debug) {
-    console.log(`===========cursor position: ${cursor}===========`)
-    let newContent = `${this.content.slice(0,cursor)}◼️${this.content.slice(cursor)}`
-    if (output) {
-      debugInfo.output = output
-      let {type, start, end, complete} = output
-      if (complete === 'insert') {
+  let newContent = `${this.content.slice(0,cursor)}◼️${this.content.slice(cursor)}`
+  if (output) {
+    let {type, start, end, complete} = output
+    output.related = related
+    if (complete === 'insert') {
+      if (log) {// colorful log in console
+        console.log(`===========cursor position: ${cursor}===========`)
         let toPrint = `${this.content.slice(0,cursor)}%c◼️%c${this.content.slice(cursor)}`
         console.log(JSON.stringify(output))
         console.log(toPrint, "color:red;", "")
-        debugInfo.toPrint = {
-          head: this.content.slice(0,cursor),
-          middle: '◼️',
-          tail: this.content.slice(cursor),
-          type, start, end, complete
-        }
-      } else {
+      }
+      output.print = {
+        head: this.content.slice(0,cursor),
+        middle: '◼️',
+        tail: this.content.slice(cursor),
+      }
+    } else { // complete = replace
+      if (cursor < start) start += 1
+      if (cursor < end) end += 1
+      let head = newContent.slice(0, start)
+      let middle = newContent.slice(start, end+1)
+      let tail = newContent.slice(end+1,)
+      if (log) {
+        console.log(`===========cursor position: ${cursor}===========`)
+        let toPrint =  `${head}%c${middle}%c${tail}`
+        console.log(JSON.stringify(output))
+        console.log(toPrint, "background-color:#41ff418c;", "")
+      }
+      output.print = { head, middle, tail }
+      if (type==='key') {
+        let {type, start, lastEnd: end, complete} = output
         if (cursor < start) start += 1
         if (cursor < end) end += 1
         let head = newContent.slice(0, start)
         let middle = newContent.slice(start, end+1)
         let tail = newContent.slice(end+1,)
-        let toPrint =  `${head}%c${middle}%c${tail}`
-        debugInfo.toPrint = {
-          head, middle, tail,
-          type, start, end, complete
-        }
-        console.log(JSON.stringify(output))
-        console.log(toPrint, "background-color:#41ff418c;", "")
-        if (type==='key') {
-          let {type, start, lastEnd: end, complete} = output
-          if (cursor < start) start += 1
-          if (cursor < end) end += 1
-          let head = newContent.slice(0, start)
-          let middle = newContent.slice(start, end+1)
-          let tail = newContent.slice(end+1,)
-          if (middle) {
-            let toPrint =  `${head}%c${middle}%c${tail}`
-            console.log(toPrint, "background-color:#41ff418c;", "")
-            debugInfo.toPrint2 = { head, middle, tail }
-          } else {
+        if (middle) {
+          let toPrint =  `${head}%c${middle}%c${tail}`
+          console.log(toPrint, "background-color:#41ff418c;", "")
+          output.printKey = { head, middle, tail }
+        } else {
+          if (log) {
             console.log(newContent)
-            debugInfo.toPrint2 = newContent
           }
+          output.printKey = newContent
         }
       }
-      if (output.type === 'edge') {
-        for (let each of related) {
-          this.retrace(each)
-        }
-      }
-    } else {
-      debugInfo.toPrint = newContent
-      console.log(newContent)
+    }
+    if (log && output.type === 'edge') {
       for (let each of related) {
         this.retrace(each)
       }
     }
-    if (detail) {
-      for (let each of related) {
-        this.retrace(each)
-      }
-    }
-  }
-  if (debug) {
-    return {output, debugInfo}
   } else {
-    return output
+    output = {type: null, print: newContent}
+    output.print = newContent
+    if (log) {
+      console.log(newContent)
+    }
   }
+  if (detail) {
+    for (let each of related) {
+      this.retrace(each)
+    }
+  }
+  return output
 }
 Tracer.prototype.traceback = function () {
+  // record the successful trace tree
   let stack = []
   let topObj
   this.traceInfo = []
@@ -348,7 +455,7 @@ Tracer.prototype.retrace = function (event) {
     console.log(`${sStr}-${eStr} ${level} ${action} ${" ".repeat(level*2)} ${rule}`)
   }
 }
-Tracer.prototype.trace = function (event, second) {
+Tracer.prototype.trace = function (event) {
   let {type, rule, location, result} = event
   let action
   if (type === 'rule.enter') {
@@ -361,7 +468,7 @@ Tracer.prototype.trace = function (event, second) {
     action = type + ' '
   }
   this.history.push(Object.assign({}, event, {level: this.level}))
-  if (this.full) {
+  if (this.logFull) {
     let start = location.start.offset
     let end = location.end.offset
     let sStr = this.formatInt(start, 3)
@@ -383,14 +490,32 @@ Tracer.prototype.trace = function (event, second) {
   }
   if (rule === 'start' && type === 'rule.match') {
     this.traceback()
-    if (this.simple) {
-      console.log('===============simple log================')
+    if (this.logSimple) {
+      console.log('===============trace tree================')
       for (let each of this.traceInfo) {
         this.retrace(each)
       }
     }
   }
 }
+
+function Parser({content, struct}) {
+  if (content === undefined) throw Error('should give content')
+  this.content = content
+  this.struct = struct
+}
+Parser.prototype.parse = function (content, options) {
+  let tracer = new Tracer({content, logSimple: options.logSimple, logFull: options.logFull})
+  let result, debugResult
+  try {
+    result = parse(todo, {tracer})
+    debugResult = tracer.getAutocompleteType(this.cursor, true)
+  } catch (e) {
+    return {error: e}
+  }
+}
+
+
 
 module.exports = {
   parse,

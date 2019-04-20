@@ -7,28 +7,28 @@
           <input id='input'
                  v-model="cursor"
                  placeholder="value"
-                 @keydown.up.prevent="cursor += 1"
-                 @keydown.down.prevent="cursor -= 1"
+                 @keydown.right.prevent="cursor = Number(cursor) + 1"
+                 @keydown.left.prevent="cursor = Number(cursor) - 1"
           />
-          <button class="value" @click="cursor -= 1" id='minus'> - </button>
-          <button class="value" @click="cursor += 1" id='plus'> + </button>
-          <pre>output: {{JSON.stringify(debug.output)}}</pre>
+          <button class="value" @click="cursor = Number(cursor) - 1" id='minus'> - </button>
+          <button class="value" @click="cursor = Number(cursor) + 1" id='plus'> + </button>
+          <pre>output: {{JSON.stringify(lodash.pick(debug.output, ['type', 'complete', 'valueType', 'start', 'end', 'lastEnd', 'extract', 'result']))}}</pre>
           <template v-if="debug.error">
             <pre>{{debug.error}}</pre>
           </template>
           <template v-else>
-            <template v-if="typeof(debug.debugInfo.toPrint)==='string'">
-              <pre>{{debug.debugInfo.toPrint}}</pre>
+            <template v-if="typeof(debug.output.print)==='string'">
+              <pre ref="pre" @click="onClick"  contenteditable="true">{{debug.output.print}}</pre>
             </template>
             <template v-else>
-              <pre>{{debug.debugInfo.toPrint.head}}<span class='highlight'>{{debug.debugInfo.toPrint.middle}}</span>{{debug.debugInfo.toPrint.tail}}</pre>
+              <pre ref="pre" @click="onClick" contenteditable="true">{{debug.output.print.head}}<span class='highlight'>{{debug.output.print.middle}}</span>{{debug.output.print.tail}}</pre>
             </template>
-            <template v-if="debug.debugInfo.toPrint2">
-              <template v-if="typeof(debug.debugInfo.toPrint2)==='string'">
-                <pre>{{debug.debugInfo.toPrint2}}</pre>
+            <template v-if="debug.output.printKey">
+              <template v-if="typeof(debug.output.printKey)==='string'">
+                <pre>{{debug.output.printKey}}</pre>
               </template>
               <template v-else>
-                <pre>{{debug.debugInfo.toPrint2.head}}<span class='highlight'>{{debug.debugInfo.toPrint2.middle}}</span>{{debug.debugInfo.toPrint2.tail}}</pre>
+                <pre>{{debug.output.printKey.head}}<span class='highlight'>{{debug.output.printKey.middle}}</span>{{debug.output.printKey.tail}}</pre>
               </template>
             </template>
           </template>
@@ -42,14 +42,15 @@
 const clsPrefix = 'vue-selenium-unittest'
 const path = require('path')
 const {SyntaxError, parse, Tracer} = require('../../index.js')
+import lodash from 'lodash'
 
 let todo, todoObj
 todo = `
-  title|startsWith: 'foo bar' ||
-  tags|elemMatch:{tagname|startsWith: astro, time|lt: } ||
+  $title|startsWith: 'foo bar' ||
+  'tags'|elemMatch:{tagname|startsWith: astro, time|lt: } ||
   tags.tag_name: 'good' && ~(tags.time|lt: '2018') ||
   tags.tag_name|in:[
-    foo, bar, 'a\\'b',
+    foo, bar, 'a\\'b', {foo:bar},
   ] ||
   halftype: ||
   flags|:flag  ||
@@ -67,7 +68,7 @@ todo = `
   }
 `
 todoObj = {$or: [
-  {title: {$startsWith: 'foo bar'}},
+  {$title: {$startsWith: 'foo bar'}},
   {tags: {$elemMatch: {
     tagname: {$startsWith: 'astro'},
     time: {$lt: null}
@@ -101,23 +102,67 @@ export default {
   data () {
     return {
       clsPrefix,
+      lodash,
       cursor: 0,
     }
   },
   computed: {
     debug () {
-      let tracer = new Tracer({content: todo, simple: true})
-      let result, debugResult
+      let tracer = new Tracer({content: todo})
+      let result, output
       try {
         result = parse(todo, {tracer})
-        debugResult = tracer.getAutocompleteType(this.cursor, true)
+        output = tracer.getAutocompleteType(this.cursor)
       } catch (e) {
         return {error: e}
       }
-      return {result, output:debugResult.output, debugInfo: debugResult.debugInfo}
+      let sel = window.getSelection()
+      let range = document.createRange()
+      let pre = this.$refs.pre
+      if (pre) {
+        this.$nextTick(() => {
+          if (typeof(output.print) === 'string') {
+            range.setStart(pre.childNodes[0], this.cursor)
+            range.collapse(true)
+            sel.removeAllRanges()
+            sel.addRange(range)
+          } else {
+            let offset = this.cursor - pre.childNodes[0].length
+            range.setStart(pre.childNodes[1].childNodes[0], offset)
+            range.collapse(true)
+            sel.removeAllRanges()
+            sel.addRange(range)
+          }
+        })
+      }
+      return {result, output}
     }
   },
   methods: {
+    onClick (event) {
+      let sel = window.getSelection()
+      let offset = sel.focusOffset
+      let pre = this.$refs.pre
+      let nodes = pre.childNodes
+      if (!nodes.length) {
+        this.cursor = offset
+      } else {
+        let index = Array.from(nodes).findIndex(_ => _===sel.focusNode)
+        console.log(index)
+        if (index === 0) {
+          this.cursor = offset
+        } else if (index === 2){
+          this.cursor = offset + nodes[0].data.length + nodes[1].innerText.length - 2
+        } else {
+          let text = sel.focusNode.data
+          if (text.indexOf('◼️')>=0) {
+            this.cursor = offset + nodes[0].data.length - 2
+          } else {
+            this.cursor = offset + nodes[0].data.length - 1
+          }
+        }
+      }
+    }
   }
 }
 </script>
