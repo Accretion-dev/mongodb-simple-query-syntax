@@ -253,7 +253,7 @@ Tracer.prototype.formatInt = function (int, width) {
   }
 }
 Tracer.prototype.getAutocompleteType = function (cursor, log, detail, print) {
-  let length = this.content.lenth
+  let length = this.content.length
   if (cursor<0 || cursor > length) throw Error(`bad cursor position: should be within [0, ${length}]`)
 
   let related = this.traceInfo.filter(_ => _.location.start.offset<=cursor && _.location.end.offset>=cursor && _.result)
@@ -265,7 +265,7 @@ Tracer.prototype.getAutocompleteType = function (cursor, log, detail, print) {
   let state
   let stateStack = []
   let parent = 'block'
-  const structRules = ['PairComplete', 'PairIncomplete', 'Key', 'ValuePair', 'ValueArray', 'ValueObject']
+  const structRules = ['PairComplete', 'PairMissValue', 'PairOnlyKey', 'Key', 'ValuePair', 'ValueArray', 'ValueObject']
   const valueTypes = [ 'true', 'false', 'null', 'String', 'SimpleString', 'Number', 'RegularExpression' ]
   // get structure for this object
   for (let each of related) {
@@ -273,10 +273,13 @@ Tracer.prototype.getAutocompleteType = function (cursor, log, detail, print) {
     let start = location.start.offset
     let end = location.end.offset
     if (type === 'PairComplete') {
-      stateStack.push({ type, start, end, result, keys: each.keys, })
+      stateStack.push({ type, start, end, result})
       state = type
-    } else if (type === 'PairIncomplete') {
-      stateStack.push({ type, start, end, result, keys: each.keys, })
+    } else if (type === 'PairMissValue') {
+      stateStack.push({ type, start, end, result})
+      state = type
+    } else if (type === 'PairOnlyKey') {
+      stateStack.push({ type, start, end, result})
       state = type
     } else if (type === 'Object') {
       stateStack.push({ type, start, end, result })
@@ -308,101 +311,131 @@ Tracer.prototype.getAutocompleteType = function (cursor, log, detail, print) {
     }
     if (type === 'ws00' && (start<cursor && cursor<end)) {
       // select field, complete: insert into cursor position, extract: ""
-      output = {type: 'fieldKey', complete: 'insert', start: cursor, end:cursor, extract:""}
+      output = {type: 'key', subtype: 'fieldKey', complete: 'insert', extract:"", start: cursor, end:cursor}
       break
     } else if (type === 'ws01' && (start<cursor && cursor<=end)) {
       // select field, complete: insert into cursor position, extract: ""
-      output = {type: 'fieldKey', complete: 'insert', start: cursor, end:cursor, extract:""}
+      output = {type: 'key', subtype: 'fieldKey', complete: 'insert', extract:"", start: cursor, end:cursor}
       break
     } else if (type === 'ws10' && (start<=cursor && cursor<end)) {
       // select field, complete: insert into cursor position, extract: ""
-      output = {type: 'fieldKey', complete: 'insert', start: cursor, end:cursor, extract:""}
+      output = {type: 'key', subtype: 'fieldKey', complete: 'insert', extract:"", start: cursor, end:cursor}
       break
     } else if (type === 'ws10Object' && (start<=cursor && cursor<end)) {
-      output = {type: 'objectKey', complete: 'insert', start: cursor, end:cursor, extract:"", stateStack}
+      output = {type: 'key', subtype: 'objectKey', complete: 'insert', extract:"", start: cursor, end:cursor, stateStack}
       break
     } else if (type === 'ws01Object' && (start<cursor && cursor<=end)) {
-      output = {type: 'objectKey', complete: 'insert', start: cursor, end:cursor, extract:"", stateStack}
+      output = {type: 'key', subtype: 'objectKey', complete: 'insert', extract:"", start: cursor, end:cursor, stateStack}
       break
     } else if (type === 'ws10Array' && (start<=cursor && cursor<end)) {
-      output = {type: 'arrayValue', complete: 'insert', start: cursor, end:cursor, extract:"", stateStack}
+      output = {type: 'value', subtype: 'arrayValue', complete: 'insert', extract:"", start: cursor, end:cursor, stateStack}
       break
     } else if (type === 'ws01Array' && (start<cursor && cursor<=end)) {
-      output = {type: 'arrayValue', complete: 'insert', start: cursor, end:cursor, extract:"", stateStack}
+      output = {type: 'value', subtype: 'arrayValue', complete: 'insert', extract:"", start: cursor, end:cursor, stateStack}
       break
     } else if (type === 'ValueBlock') {
       output = {
-        type: 'fieldKey',
+        type: 'key',
+        subtype: type,
+        valueType: value.type,
         complete: 'replace',
+        extract:String(value.result), // string
         start: value.start,
         end: value.end,
-        extract:String(value.result), // string
-        valueType: value.type,
         value,
         stateStack,
       }
       break
     } else if (type === 'ValueObject') { // unfinished object
       output = {
-        type: 'objectKey',
+        type: 'key',
+        subtype: 'objectKey',
+        valueType: value.type,
         complete: 'replace',
+        extract:String(value.result), // string
         start: value.start,
         end: value.end,
-        extract:String(value.result), // string
-        valueType: value.type,
         value,
         stateStack,
       }
       break
     } else if (type === 'ws01PS'&& (start<cursor && cursor<=end)) { // unfinished object
-      output = { type: 'objectValue', complete: 'insert', start: cursor, end: cursor, extract:"", stateStack}
+      output = { type: 'value', subtype: 'pairValueNull', complete: 'insert', extract:"", start: cursor, end: cursor, stateStack}
       break
     } else if (type === 'ValueArray') { // unfinished object
       output = {
-        type: 'arrayValue',
+        type: 'value',
+        subtype: 'arrayValue',
+        valueType: value.type,
         complete: 'replace',
+        extract:String(value.result), // string
         start: value.start,
         end: value.end,
-        extract:String(value.result), // string
-        valueType: value.type,
         value,
         stateStack,
       }
       break
-    } else if (type === 'Key') { // no more level under key
+    } else if (type === 'Key' || type === 'KeyPlus') { // no more level under key
       value = each
+      let valueType = 'key'
       let keyString = this.content.slice(start, end+1)
       if (each.result.length !== keyString.split('|').length) {
         throw Error('should not be here, need debug')
       }
       let keyIndex = 0
       let lastEnd = 0
-      for (let index=start+1; index<=cursor; index++) {
+      for (let index=start+1; index<=cursor; index++) { // for operations
         if (this.content[index-1] === '|') {
+          valueType = 'subop'
           keyIndex += 1
           lastEnd = index-1
         }
       }
+      let rawExtract = each.result.slice(0, keyIndex+1)
+      let extract
+      if (rawExtract.length === 1) { // for subfields
+        let subfields = rawExtract[0].split('.')
+        if (subfields.length > 0) {
+          keyIndex = 0
+          lastEnd = 0
+          for (let index=start+1; index<=cursor; index++) { // for operations
+            if (this.content[index-1] === '.') {
+              valueType = 'subfield'
+              keyIndex += 1
+              lastEnd = index-1
+            }
+          }
+          let newExtract = subfields.slice(0, keyIndex+1)
+          extract = newExtract.concat(rawExtract.slice(1,))
+        } else {
+          extract = rawExtract
+        }
+      } else {
+        extract = rawExtract
+      }
+
       output = {
         type: 'key',
+        subtype: type,
+        valueType,
         complete: 'replace',
+        extract, // array
         start,
         end,
         lastEnd, // when do replace, keep [start~lastStart], delete [lastStart+1 ~ end] and replace with autocomplete
-        extract:each.result.slice(0, keyIndex+1), // array
-        valueType: 'key',
         value,
         stateStack,
       }
       break
     } else if (type === 'ValuePair') { // no more level under key
       output = {
-        type: 'pairValue',
+        type: 'value',
+        subtype: 'pairValue',
+        valueType: value.type,
         complete: 'replace',
+        extract:String(value.result), // string
         start: value.start,
         end: value.end,
-        extract:String(value.result), // string
-        valueType: value.type,
         value,
         stateStack,
       }
@@ -410,22 +443,24 @@ Tracer.prototype.getAutocompleteType = function (cursor, log, detail, print) {
     } else if (type === 'Object') {
       output = {
         type: 'edge',
+        subtype: type,
+        valueType: 'object',
         complete: null,
         start,
         end,
         value: each.result,
-        valueType: 'object',
         stateStack,
       }
       break
     } else if (type === 'Array') {
       output = {
         type: 'edge',
+        subtype: type,
+        valueType: 'array',
         complete: null,
         start,
         end,
         value: each.result,
-        valueType: 'array',
         stateStack,
       }
       break
@@ -660,9 +695,52 @@ Parser.prototype.analysis = function (cursor) {
 }
 
 Parser.prototype.autocomplete = function (input) {
-  let {type, stateStack} = input
+  const pairKeys = ["PairComplete", "PairMissValue", 'PairOnlyKey']
+  let {type, subtype, valueType, stateStack, extract} = input
   if (!type || !this.struct) return {type: null} // not good cursor position for auto complete
-  console.log(input)
+  let path = []
+  if (stateStack && subtype !== 'ValueBlock') {
+    let parentStacks = type === 'key' ? stateStack.slice(0,-1) : stateStack
+    for (let item of parentStacks) { // for value
+      if (!pairKeys.includes(item.type)) continue
+      let keys = item.result.keys
+      if (keys.length === 1) {
+        let subkeys = keys[0].split('.')
+        for (let subkey of subkeys) {
+          if (subkey) path.push(subkey)
+        }
+      } else if (keys.length > 1) {
+        let subkeys = keys[0].split('.')
+        for (let subkey of subkeys) {
+          if (subkey) path.push(subkey)
+        }
+        let tails = keys.slice(1)
+        for (let _ of tails) {
+          path.push(`\$${_}`)
+        }
+      }
+    }
+    if (type === 'key') { // for nested key operations
+      let keys = extract.slice(0,-1)
+      if (keys.length === 1) {
+        let subkeys = keys[0].split('.')
+        for (let subkey of subkeys) {
+          if (subkey) path.push(subkey)
+        }
+      } else if (keys.length > 1){
+        let subkeys = keys[0].split('.')
+        for (let subkey of subkeys) {
+          if (subkey) path.push(subkey)
+        }
+        let tails = keys.slice(1)
+        for (let _ of tails) {
+          path.push(`\$${_}`)
+        }
+      }
+    }
+  }
+  console.log(input, path)
+
   if (type === 'fieldKey') {
 
   } else if (type === 'key') {

@@ -64,6 +64,7 @@ Block "block"
   / NestedPairBlock
   / NestedValueBlock
   / Pair
+  / PairOnlyKey
   / ValueBlock
 
 NestedORBlock 'nestedorblock'
@@ -169,7 +170,7 @@ Pair "pair"
       return {[key]: value}
     }
   }
-  / v:PairIncomplete {
+  / v:PairMissValue {
     let {keys} = v
     if (keys.length===1) {
       return {[keys[0]]: null}
@@ -191,13 +192,13 @@ PairComplete
   = keys:Key ws PairSeperator ws value:ValuePair {
     return {keys, value}
   }
-PairIncomplete
+PairMissValue
   = keys:Key ws ws01PS {
     return {keys}
   }
 
 ws01PS "pws01"
-  = PairSeperator
+  = PairSeperator ws? 
 
 OPSeperator
   = '|'
@@ -208,12 +209,39 @@ PairSeperator
 OP "op"
   = chars:[0-9a-zA-Z_$]+ { return chars.join("") }
 
+PairOnlyKey "paironlykey"
+  = v:PairKey {
+      return v.keys.join('|')
+    }
+
+PairKey "pairkey"
+  = keys:KeyPlus {
+      return {keys}
+    }
+
 Key "key"
   = head:KeyValue
     middle:(
       ws OPSeperator ws op:OP
       { return op }
     )*
+    tail:(
+      ws OPSeperator
+    )?
+    {
+      if (tail === null) {
+        return [head].concat(middle)
+      } else {
+        return [head].concat(middle).concat([""])
+      }
+    }
+
+KeyPlus "keyplus"
+  = head:KeyValue
+    middle:(
+      ws OPSeperator ws op:OP
+      { return op }
+    )+
     tail:(
       ws OPSeperator
     )?

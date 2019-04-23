@@ -6,11 +6,13 @@
         <parse-test-pre :content="testData.simple.content" :contentObj="testData.simple.contentObj" :struct="demoStruct"/>
       </test-block>
     </test-env>
+    <!--
     <test-env>
       <test-block title="Test syntax analysis" name="syntax" id="syntax-id" :fold="true">
         <parse-test-pre :content="testData.simple.content" :contentObj="testData.simple.contentObj"/>
       </test-block>
     </test-env>
+    -->
   </div>
 </template>
 
@@ -49,8 +51,9 @@ let testData = {
       flags|:flag  ||
       simple|level1|level2|level3 : s123 ||
       simple|level1|level2| : s12$ ||
-      simple|level1|level2| : ||
+      simple|level1|level2| :||
       ~not|level|test| : ||
+      test.more.than|one|space| :    ||
       (foo:foo && bar:bar || ~foobar:foobar && barfoo:barfoo) ||
       ( (unfinished0) unfinished1) ||
       'unfinished2' ||
@@ -59,7 +62,7 @@ let testData = {
         'undefined%5',
         unfinished6: ,
         unfinished7|op8|:,
-        level1|in: { level2|in|in: { level3|in|in|in: good}},
+        level1|in: { level2.stack|in|in: { level3|in|in|in: good}},
       }`,
     contentObj: {$or: [
       {$title: {$startsWith: 'foo bar'}},
@@ -79,6 +82,7 @@ let testData = {
       {simple:{$level1:{$level2:{$: 's12$'}}}},
       {simple:{$level1:{$level2:{$: null}}}},
       {$not:{not: {$level:{$test:{$: null}}}}},
+      {'test.more.than':{$one:{$space:{$: null}}}},
       {$or: [
         {$and: [{foo:"foo"}, {bar:"bar"}]},
         {$and: [{$not: {foobar:"foobar"}}, {barfoo: "barfoo"}]}
@@ -88,7 +92,7 @@ let testData = {
       {unfinished3: {
         unfinished4: null, 'undefined%5': null, unfinished6: null, unfinished7: {$op8: {$: null}},
         level1: { $in:{
-          level2: {
+          'level2.stack': {
             $in:{ $in:{
               level3: {$in:{$in:{$in: 'good' }}}
             } }
