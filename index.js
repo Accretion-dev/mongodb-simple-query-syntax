@@ -115,7 +115,7 @@ let JSONEX = {
 
 
 let demoStruct = {
-  description: 'Test for all kinds of data type',
+  description: 'root fields',
   type: 'table',
   fields: {
     string: { description:'string', type:'string' },
@@ -222,23 +222,13 @@ let demoStruct = {
     },
   }
 }
-let domoStr = `
-(string: testString || string: "testString") ||
-(number: 23333 ||
-date: '12:33:12'
-date: '20190412' ||
-date: '20190412T12:33:12' ||
-date: '20190412T12:33:12Z' ||
-date: '20190412T12:33:12+8' ||
-array_number: 123 ||
-array_number: [123,321] ||
-`
 
-function Tracer ({content, logFull, logSimple}) {
+function Tracer ({content, logFull, logSimple, print}) {
   this.level = 0
   this.history = []
   this.logFull = logFull
   this.logSimple = logSimple
+  this.print = print
   if (content === undefined) {
     throw Error('should give content')
   }
@@ -262,7 +252,7 @@ Tracer.prototype.formatInt = function (int, width) {
     return " ".repeat(width - digit) + String(rawint)
   }
 }
-Tracer.prototype.getAutocompleteType = function (cursor, log, detail) {
+Tracer.prototype.getAutocompleteType = function (cursor, log, detail, print) {
   let length = this.content.lenth
   if (cursor<0 || cursor > length) throw Error(`bad cursor position: should be within [0, ${length}]`)
 
@@ -361,7 +351,7 @@ Tracer.prototype.getAutocompleteType = function (cursor, log, detail) {
         extract:String(value.result), // string
         valueType: value.type,
         value,
-        stateStack
+        stateStack,
       }
       break
     } else if (type === 'ws01PS'&& (start<cursor && cursor<=end)) { // unfinished object
@@ -376,7 +366,7 @@ Tracer.prototype.getAutocompleteType = function (cursor, log, detail) {
         extract:String(value.result), // string
         valueType: value.type,
         value,
-        stateStack
+        stateStack,
       }
       break
     } else if (type === 'Key') { // no more level under key
@@ -453,53 +443,65 @@ Tracer.prototype.getAutocompleteType = function (cursor, log, detail) {
         console.log(JSON.stringify(output))
         console.log(toPrint, "color:red;", "")
       }
-      output.print = {
-        head: this.content.slice(0,cursor),
-        middle: '◼️',
-        tail: this.content.slice(cursor),
+      if (print) {
+        output.print = {
+          head: this.content.slice(0,cursor),
+          middle: '◼️',
+          tail: this.content.slice(cursor),
+        }
       }
     } else { // complete = replace
-      if (cursor < start) start += 1
-      if (cursor < end) end += 1
-      let head = newContent.slice(0, start)
-      let middle = newContent.slice(start, end+1)
-      let tail = newContent.slice(end+1,)
-      if (log) {
-        console.log(`===========cursor position: ${cursor}===========`)
-        let toPrint =  `${head}%c${middle}%c${tail}`
-        console.log(JSON.stringify(output))
-        console.log(toPrint, "background-color:#41ff418c;", "")
-      }
-      output.print = { head, middle, tail }
-      if (type==='key') {
-        let {type, start, lastEnd: end, complete} = output
+      if (log||print) {
         if (cursor < start) start += 1
         if (cursor < end) end += 1
         let head = newContent.slice(0, start)
         let middle = newContent.slice(start, end+1)
         let tail = newContent.slice(end+1,)
-        if (middle) {
-          if (log) {
-            let toPrint =  `${head}%c${middle}%c${tail}`
-            console.log(toPrint, "background-color:#41ff418c;", "")
+        if (log) {
+          console.log(`===========cursor position: ${cursor}===========`)
+          let toPrint =  `${head}%c${middle}%c${tail}`
+          console.log(JSON.stringify(output))
+          console.log(toPrint, "background-color:#41ff418c;", "")
+        }
+        if (print) {
+          output.print = { head, middle, tail }
+        }
+        if (type==='key') {
+          let {type, start, lastEnd: end, complete} = output
+          if (cursor < start) start += 1
+          if (cursor < end) end += 1
+          let head = newContent.slice(0, start)
+          let middle = newContent.slice(start, end+1)
+          let tail = newContent.slice(end+1,)
+          if (middle) {
+            if (log) {
+              let toPrint =  `${head}%c${middle}%c${tail}`
+              console.log(toPrint, "background-color:#41ff418c;", "")
+            }
+            if (print) {
+              output.printKey = { head, middle, tail }
+            }
+          } else {
+            if (log) {
+              console.log(newContent)
+            }
+            if (print) {
+              output.printKey = newContent
+            }
           }
-          output.printKey = { head, middle, tail }
-        } else {
-          if (log) {
-            console.log(newContent)
-          }
-          output.printKey = newContent
         }
       }
     }
-    if (log && output.type === 'edge') {
-      for (let each of related) {
-        this.retrace(each)
-      }
-    }
+    //if (log && output.type === 'edge') {
+    //  for (let each of related) {
+    //    this.retrace(each)
+    //  }
+    //}
   } else {
     output = {type: null, print: newContent}
-    output.print = newContent
+    if (print) {
+      output.print = newContent
+    }
     if (log) {
       console.log(newContent)
     }
@@ -633,17 +635,39 @@ function Parser({struct, options} = {}) {
 Parser.prototype.parse = function ({content, cursor}) {
   let logSimple = this.options.logSimple
   let logFull = this.options.logFull
+  let print = this.options.print
+  let tracer = new Tracer({content, logSimple, logFull, print})
+  this.tracer = tracer
+  let result = parse(content, {tracer})
+  this.result = result
+  if (cursor !== undefined) {
+    analysis = tracer.getAutocompleteType(cursor, log, detail, print)
+    autocomplete = this.autocomplete(analysis)
+    return {result, analysis, autocomplete}
+  } else {
+    return result
+  }
+}
+Parser.prototype.analysis = function (cursor) {
+  if (this.result === undefined) throw Error('should do parse before this')
   let log = this.options.log
   let detail = this.options.detail
-  let tracer = new Tracer({content, logSimple, logFull})
-  let result = parse(content, {tracer})
-  let analysis = tracer.getAutocompleteType(cursor, log, detail)
+  let print = this.options.print
+  let result = this.result
+  let analysis = this.tracer.getAutocompleteType(cursor, log, detail, print)
   let autocomplete = this.autocomplete(analysis)
   return {result, analysis, autocomplete}
 }
 
 Parser.prototype.autocomplete = function (input) {
+  let {type, stateStack} = input
+  if (!type || !this.struct) return {type: null} // not good cursor position for auto complete
+  console.log(input)
+  if (type === 'fieldKey') {
 
+  } else if (type === 'key') {
+
+  }
 }
 
 module.exports = {
@@ -651,4 +675,5 @@ module.exports = {
   SyntaxError,
   Tracer,
   Parser,
+  demoStruct,
 }

@@ -8,11 +8,7 @@
     />
     <button class="value" @click="cursor = Number(cursor) - 1" id='minus'> - </button>
     <button class="value" @click="cursor = Number(cursor) + 1" id='plus'> + </button>
-    <pre>analysis: {{JSON.stringify(lodash.pick(debug.analysis, ['type', 'complete', 'valueType', 'start', 'end', 'lastEnd', 'extract', 'result']))}}</pre>
-    <template v-if="debug.error">
-      <pre>{{debug.error}}</pre>
-    </template>
-    <template v-else>
+    <template v-if="debug">
       <template v-if="typeof(debug.analysis.print)==='string'">
         <pre ref="pre"
             @click="onClick"
@@ -33,6 +29,8 @@
              contenteditable="true"
         >{{debug.analysis.print.head}}<span class='highlight'>{{debug.analysis.print.middle}}</span>{{debug.analysis.print.tail}}</pre>
       </template>
+      <pre>analysis: {{JSON.stringify(lodash.pick(debug.analysis, ['type', 'complete', 'valueType', 'start', 'end', 'lastEnd', 'extract', 'result']))}}</pre>
+      <pre>antocomplete: {{JSON.stringify(debug.autocomplete)}}</pre>
       <template v-if="debug.analysis.printKey">
         <template v-if="typeof(debug.analysis.printKey)==='string'">
           <pre>{{debug.analysis.printKey}}</pre>
@@ -60,6 +58,10 @@ export default {
       type: String,
       default: '',
     },
+    struct: {
+      type: Object,
+      default: null,
+    },
     contentObj: {
       type: Object,
       default: null,
@@ -67,6 +69,7 @@ export default {
   },
   data () {
     return {
+      parser: null,
       clsPrefix,
       lodash,
       cursor: 0,
@@ -76,20 +79,10 @@ export default {
   computed: {
     debug () {
       let result, analysis
-      try {
-        let parser = new Parser()
-        let _ = parser.parse({content: this.content, cursor: this.cursor})
-        console.log(_)
-        result = _.result
-        analysis = _.analysis
-        if (!equal(result, this.contentObj)) {
-          console.log({expect: this.contentObj, actual: result})
-          console.log(diff(result, this.contentObj))
-          throw Error('parse error')
-        }
-      } catch (e) {
-        return {error: e}
-      }
+      if (!this.parser) return null
+      let _ = this.parser.analysis(this.cursor)
+      result = _.result
+      analysis = _.analysis
       let sel = window.getSelection()
       let range = document.createRange()
       let pre = this.$refs.pre
@@ -112,7 +105,21 @@ export default {
       return {result, analysis}
     }
   },
+  created () {
+    this.$watch('content', this.onChangeInput)
+    this.$watch('struct', this.onChangeInput)
+    this.onChangeInput()
+  },
   methods: {
+    onChangeInput () {
+      this.parser = new Parser({struct: this.struct, options:{print: true}})
+      let result = this.parser.parse({content: this.content})
+      if (!equal(result, this.contentObj)) {
+        console.log({expect: this.contentObj, actual: result})
+        console.log(diff(result, this.contentObj))
+        throw Error('parse error')
+      }
+    },
     onMove () {
       clearTimeout(this.timer.move)
       this.timer.move = setTimeout(() => {

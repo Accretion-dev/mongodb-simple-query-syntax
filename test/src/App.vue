@@ -2,6 +2,11 @@
   <div id="app" :class="clsPrefix">
     <h1> Test enviroment for mongodb-simple-query-syntax</h1>
     <test-env>
+      <test-block title="Test syntax analysis" name="syntax" id="syntax-id">
+        <parse-test-pre :content="testData.simple.content" :contentObj="testData.simple.contentObj" :struct="demoStruct"/>
+      </test-block>
+    </test-env>
+    <test-env>
       <test-block title="Test syntax analysis" name="syntax" id="syntax-id" :fold="true">
         <parse-test-pre :content="testData.simple.content" :contentObj="testData.simple.contentObj"/>
       </test-block>
@@ -12,11 +17,23 @@
 <script>
 const clsPrefix = 'test-env'
 const path = require('path')
-const {SyntaxError, parse, Tracer} = require('../../index.js')
+const {demoStruct} = require('../../index.js')
 import lodash from 'lodash'
 import equal from 'deep-equal'
 import { diff, addedDiff, deletedDiff, updatedDiff, detailedDiff } from 'deep-object-diff'
 import parseTestPre from './component/parseTestPre.vue'
+
+let demoStr = `
+(string: testString || string: "testString") ||
+(number: 23333 ||
+date: '12:33:12'
+date: '20190412' ||
+date: '20190412T12:33:12' ||
+date: '20190412T12:33:12Z' ||
+date: '20190412T12:33:12+8' ||
+array_number: 123 ||
+array_number: [123,321] ||
+`
 
 let testData = {
   simple: {
@@ -92,6 +109,8 @@ export default {
       lodash,
       cursor: 0,
       testData,
+      demoStr,
+      demoStruct,
       timer:{move: null},
     }
   },
