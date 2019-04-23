@@ -1,6 +1,119 @@
 const path = require('path')
 let {SyntaxError, parse} = require('./mongodb-simple-query-syntax.js')
 
+/*
+TODO:
+  * support reg
+  * add =><+- into simpleString
+  * make a daterange parser
+  * make a date parser
+  * backend
+    * pinyin plugin
+    * lm query
+*/
+
+/*
+* stringField non match
+  * query primary keys and do lm
+* string:
+  stringField
+    => stringField|reg,in,nin,lt,gt,lte,gte
+  stringValue:
+    if null:
+      'string or regex'
+    if string or simpleString
+      => lm method
+    if reg:
+      reg filter
+* number:
+  numberField:
+    => numberField|lt,gt,lte,gte,eq,ne,in,nin
+  numberValue:
+    if null:
+      'number or filter'
+    if number:
+      => lm method
+    if simpleString
+      apply filter, sort, and lm method
+* date:
+  dateField:
+    => dateField|lt,gt,lte,gte
+  dateValue:
+    if null:
+      'date or filter'
+    do date parse
+      return a date
+        lm method
+      return a function:
+        do filter
+          lm method
+* bool:
+    boolField
+    voolValue:
+      true
+      false
+
+* unknown:
+    no auto complete
+
+* array_number,string,date:
+    field:
+      => field|lt,gt,lte,gte,elemMatch, field:{}
+    field|elemMatch
+      => field|elemMatch|,lt,gt,lte,gte,or,and, field|elemMatch:{}
+
+    in object:
+      subfield,
+
+    value and value inside {}:like the single value
+* array of unknown
+    field:
+      => field|lt,gt,lte,gte,elemMatch, field:{}
+    value:
+      no auto complete
+* object:
+    objectField:
+      => objectField.subfields
+      => => ....
+    objectValue:
+* array of object
+    arrayField:
+      => arrayField.objectFields
+
+
+*/
+
+function replacer(key, value) {
+  if (value instanceof RegExp) {
+    return ("__REGEXP " + value.toString())
+  } else if (value instanceof Date) {
+    return ("__DATE " + value.toString())
+  } else {
+    return value
+  }
+}
+function reviver(key, value) {
+  if (value.toString().indexOf("__REGEXP ") == 0) {
+    var m = value.split("__REGEXP ")[1].match(/\/(.*)\/(.*)?/)
+    return new RegExp(m[1], m[2] || "")
+  } else if (value.toString().indexOf("__DATE ") == 0) {
+    var m = value.split("__DATE ")[1]
+    return new Date(m)
+  } else {
+    return value
+  }
+}
+let JSONEX = {
+  stringify (obj) {
+    return JSON.stringify(obj, replacer)
+  },
+  parse (str) {
+    return JSON.parse(obj, reviver)
+  },
+}
+//console.log(JSON.parse(JSON.stringify(o, replacer, 2), reviver));
+
+
 let demoStruct = {
   description: 'Test for all kinds of data type',
   type: 'table',
@@ -8,8 +121,9 @@ let demoStruct = {
     string: { description:'string', type:'string' },
     number: { description:'number', type:'number' },
     date: { description:'date', type:'date' },
+    bool: { description:'bool', type:'bool' },
     array_number: { description: '[number]', array: true, type:'number'},
-    array_string: { description: '[strin]', array: true, type:'string'},
+    array_string: { description: '[string]', array: true, type:'string'},
     array_date: { description: '[date]', array: true, type:'date'},
     array_unknown: { description:'[?]', array: true },
     array_object_unknown: { description:'[{?}]', array: true, type:'object' },
@@ -108,6 +222,17 @@ let demoStruct = {
     },
   }
 }
+let domoStr = `
+(string: testString || string: "testString") ||
+(number: 23333 ||
+date: '12:33:12'
+date: '20190412' ||
+date: '20190412T12:33:12' ||
+date: '20190412T12:33:12Z' ||
+date: '20190412T12:33:12+8' ||
+array_number: 123 ||
+array_number: [123,321] ||
+`
 
 function Tracer ({content, logFull, logSimple}) {
   this.level = 0
@@ -151,7 +276,7 @@ Tracer.prototype.getAutocompleteType = function (cursor, log, detail) {
   let stateStack = []
   let parent = 'block'
   const structRules = ['PairComplete', 'PairIncomplete', 'Key', 'ValuePair', 'ValueArray', 'ValueObject']
-  const valueTypes = [ 'true', 'false', 'null', 'String', 'SimpleString', 'Number' ]
+  const valueTypes = [ 'true', 'false', 'null', 'String', 'SimpleString', 'Number', 'RegularExpression' ]
   // get structure for this object
   for (let each of related) {
     let {rule:type, location, result} = each
@@ -508,19 +633,18 @@ function Parser({content, struct}) {
 }
 Parser.prototype.parse = function (content, options) {
   let tracer = new Tracer({content, logSimple: options.logSimple, logFull: options.logFull})
-  let result, debugResult
-  try {
-    result = parse(todo, {tracer})
-    debugResult = tracer.getAutocompleteType(this.cursor, true)
-  } catch (e) {
-    return {error: e}
-  }
+  let result = parse(todo, {tracer})
+  let output = tracer.getAutocompleteType(this.cursor, {log: options.log})
+  let complete = tracer.autocomplete(output)
+  return Object.assign(output, {result})
 }
+Parser.prototype.parse = function (output) {
 
-
+}
 
 module.exports = {
   parse,
   SyntaxError,
   Tracer,
+  Parser,
 }

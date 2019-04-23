@@ -2,7 +2,7 @@
   <div id="app" :class="clsPrefix">
     <h1> Test enviroment for mongodb-simple-query-syntax</h1>
     <test-env>
-      <test-block title="Test syntax analysis" name="syntax" id="syntax-id">
+      <test-block title="Test syntax analysis" name="syntax" id="syntax-id" :fold="true">
         <div>
           <input id='input'
                  v-model="cursor"
@@ -69,6 +69,7 @@ todo = `
     foo, bar, 'a\\'b', {foo:bar},
   ] ||
   halftype: ||
+  regtest: /^[\\u4E00-\\u9FA5A-Za-z0-9]+ [a-zA-Z0-9][-a-zA-Z0-9]{0,62}(.[a-zA-Z0-9][-a-zA-Z0-9]{0,62})+ \\w+([-+.]\\w+)*@\\w+([-.]\\w+)*\\.\\w+([-.]\\w+)*$/ ||
   flags|:flag  ||
   simple|level1|level2|level3 : s123 ||
   simple|level1|level2| : s12$ ||
@@ -97,6 +98,7 @@ todoObj = {$or: [
   ]},
   {'tags.tag_name':{$in:['foo', 'bar', 'a\'b', {foo:'bar'}]}},
   {halftype: null},
+  {regtest: /^[\u4E00-\u9FA5A-Za-z0-9]+ [a-zA-Z0-9][-a-zA-Z0-9]{0,62}(.[a-zA-Z0-9][-a-zA-Z0-9]{0,62})+ \w+([-+.]\w+)*@\w+([-.]\w+)*\.\w+([-.]\w+)*$/},
   {flags:{$:'flag'}},
   {simple:{$level1:{$level2:{$level3: 's123'}}}},
   {simple:{$level1:{$level2:{$: 's12$'}}}},
