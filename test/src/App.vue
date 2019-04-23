@@ -53,7 +53,7 @@ let testData = {
       simple|level1|level2| : s12$ ||
       simple|level1|level2| :||
       ~not|level|test| : ||
-      test.more.than|one|space| :    ||
+      test.more.than.extra|one|space| :    ||
       (foo:foo && bar:bar || ~foobar:foobar && barfoo:barfoo) ||
       ( (unfinished0) unfinished1) ||
       'unfinished2' ||
@@ -82,7 +82,7 @@ let testData = {
       {simple:{$level1:{$level2:{$: 's12$'}}}},
       {simple:{$level1:{$level2:{$: null}}}},
       {$not:{not: {$level:{$test:{$: null}}}}},
-      {'test.more.than':{$one:{$space:{$: null}}}},
+      {'test.more.than.extra':{$one:{$space:{$: null}}}},
       {$or: [
         {$and: [{foo:"foo"}, {bar:"bar"}]},
         {$and: [{$not: {foobar:"foobar"}}, {barfoo: "barfoo"}]}

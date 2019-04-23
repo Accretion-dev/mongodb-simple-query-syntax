@@ -406,12 +406,16 @@ Tracer.prototype.getAutocompleteType = function (cursor, log, detail, print) {
             }
           }
           let newExtract = subfields.slice(0, keyIndex+1)
-          extract = newExtract.concat(rawExtract.slice(1,))
+          extract = [newExtract].concat(rawExtract.slice(1,))
         } else {
           extract = rawExtract
         }
       } else {
-        extract = rawExtract
+        if (rawExtract[0].indexOf('.')>=0) {
+          extract = [rawExtract[0].split('.')].concat(rawExtract.slice(1,))
+        } else {
+          extract = rawExtract
+        }
       }
 
       output = {
@@ -705,14 +709,22 @@ Parser.prototype.autocomplete = function (input) {
       if (!pairKeys.includes(item.type)) continue
       let keys = item.result.keys
       if (keys.length === 1) {
-        let subkeys = keys[0].split('.')
-        for (let subkey of subkeys) {
-          if (subkey) path.push(subkey)
+        if (keys[0].indexOf('.')>=0) {
+          let subkeys = keys[0].split('.')
+          for (let subkey of subkeys) {
+            if (subkey) path.push(subkey)
+          }
+        } else {
+          path.push(keys[0])
         }
       } else if (keys.length > 1) {
-        let subkeys = keys[0].split('.')
-        for (let subkey of subkeys) {
-          if (subkey) path.push(subkey)
+        if (keys[0].indexOf('.')>=0) {
+          let subkeys = keys[0].split('.')
+          for (let subkey of subkeys) {
+            if (subkey) path.push(subkey)
+          }
+        } else {
+          path.push(keys[0])
         }
         let tails = keys.slice(1)
         for (let _ of tails) {
@@ -721,16 +733,30 @@ Parser.prototype.autocomplete = function (input) {
       }
     }
     if (type === 'key') { // for nested key operations
-      let keys = extract.slice(0,-1)
+      let keys
+      if (Array.isArray(extract[0]) && extract.length === 1) {
+        keys = extract
+        keys[0] = keys[0].slice(0,-1)
+      } else {
+        keys = extract.slice(0,-1)
+      }
       if (keys.length === 1) {
-        let subkeys = keys[0].split('.')
-        for (let subkey of subkeys) {
-          if (subkey) path.push(subkey)
+        if (Array.isArray(keys[0])) {
+          let subkeys = keys[0]
+          for (let subkey of subkeys) {
+            if (subkey) path.push(subkey)
+          }
+        } else {
+          path.push(keys[0])
         }
       } else if (keys.length > 1){
-        let subkeys = keys[0].split('.')
-        for (let subkey of subkeys) {
-          if (subkey) path.push(subkey)
+        if (Array.isArray(keys[0])) {
+          let subkeys = keys[0]
+          for (let subkey of subkeys) {
+            if (subkey) path.push(subkey)
+          }
+        } else {
+          path.push(keys[0])
         }
         let tails = keys.slice(1)
         for (let _ of tails) {
