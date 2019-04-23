@@ -626,19 +626,23 @@ Tracer.prototype.trace = function (event) {
   }
 }
 
-function Parser({content, struct}) {
-  if (content === undefined) throw Error('should give content')
-  this.content = content
+function Parser({struct, options} = {}) {
   this.struct = struct
+  this.options = options || {}
 }
-Parser.prototype.parse = function (content, options) {
-  let tracer = new Tracer({content, logSimple: options.logSimple, logFull: options.logFull})
-  let result = parse(todo, {tracer})
-  let output = tracer.getAutocompleteType(this.cursor, {log: options.log})
-  let complete = tracer.autocomplete(output)
-  return Object.assign(output, {result})
+Parser.prototype.parse = function ({content, cursor}) {
+  let logSimple = this.options.logSimple
+  let logFull = this.options.logFull
+  let log = this.options.log
+  let detail = this.options.detail
+  let tracer = new Tracer({content, logSimple, logFull})
+  let result = parse(content, {tracer})
+  let analysis = tracer.getAutocompleteType(cursor, log, detail)
+  let autocomplete = this.autocomplete(analysis)
+  return {result, analysis, autocomplete}
 }
-Parser.prototype.parse = function (output) {
+
+Parser.prototype.autocomplete = function (input) {
 
 }
 
