@@ -6,13 +6,11 @@
         <parse-test-pre :content="testData.simple.content" :contentObj="testData.simple.contentObj" :struct="demoStruct"/>
       </test-block>
     </test-env>
-    <!--
     <test-env>
-      <test-block title="Test syntax analysis" name="syntax" id="syntax-id" :fold="true">
+      <test-block title="Test syntax analysis" name="syntax" id="syntax-id" :fold="true" :struct="demoStruct">
         <parse-test-pre :content="testData.simple.content" :contentObj="testData.simple.contentObj"/>
       </test-block>
     </test-env>
-    -->
   </div>
 </template>
 
@@ -54,16 +52,27 @@ let testData = {
       simple|level1|level2| :||
       ~not|level|test| : ||
       test.more.than.extra|one|space| :    ||
+      'string.more.than.extra'|one|space| :    ||
       (foo:foo && bar:bar || ~foobar:foobar && barfoo:barfoo) ||
       ( (unfinished0) unfinished1) ||
       'unfinished2' ||
       unfinished3: {
-        unfinished4,
-        'undefined%5',
-        unfinished6: ,
-        unfinished7|op8|:,
+        part,
+        partDot.,
+        partOP|,
+        partOP1|op|op|,
+        partOP2.nice.good.great|op|op|,
+        'u%5',
+        u6: ,
+        u7|op8|:,
         level1|in: { level2.stack|in|in: { level3|in|in|in: good}},
-      }`,
+      } ||
+      part||partgood:good||
+      partDot. ||
+      partOP| ||
+      partOP1|op|op| ||
+      partOP2.nice.good.great|op|op|
+      `,
     contentObj: {$or: [
       {$title: {$startsWith: 'foo bar'}},
       {tags: {$elemMatch: {
@@ -83,6 +92,7 @@ let testData = {
       {simple:{$level1:{$level2:{$: null}}}},
       {$not:{not: {$level:{$test:{$: null}}}}},
       {'test.more.than.extra':{$one:{$space:{$: null}}}},
+      {'string.more.than.extra':{$one:{$space:{$: null}}}},
       {$or: [
         {$and: [{foo:"foo"}, {bar:"bar"}]},
         {$and: [{$not: {foobar:"foobar"}}, {barfoo: "barfoo"}]}
@@ -90,7 +100,12 @@ let testData = {
       {$and: ['unfinished0', 'unfinished1']},
       'unfinished2',
       {unfinished3: {
-        unfinished4: null, 'undefined%5': null, unfinished6: null, unfinished7: {$op8: {$: null}},
+        part: null,
+        'partDot.': null,
+        partOP: {$: null},
+        partOP1: {$op: {$op: {$:null}}},
+        'partOP2.nice.good.great': {$op: {$op: {$:null}}},
+        'u%5': null, u6: null, u7: {$op8: {$: null}},
         level1: { $in:{
           'level2.stack': {
             $in:{ $in:{
@@ -99,6 +114,12 @@ let testData = {
           } }
         },
       }},
+      'part',
+      {partgood: 'good'},
+      {'partDot.': null},
+      {partOP:{$:null}},
+      {partOP1:{$op:{$op:{$:null}}}},
+      {'partOP2.nice.good.great':{$op:{$op: {$: null}}}},
     ]}
   }
 }

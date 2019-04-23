@@ -116,8 +116,11 @@ let JSONEX = {
 
 let demoStruct = {
   description: 'root fields',
-  type: 'table',
+  type: 'key',
   fields: {
+    $not: { description:'&&', type: 'object', array: true },
+    $and: { description:'~', type: 'object', array: true },
+    $or: { description:'||', type: 'object', array: true },
     string: { description:'string', type:'string' },
     number: { description:'number', type:'number' },
     date: { description:'date', type:'date' },
@@ -265,7 +268,7 @@ Tracer.prototype.getAutocompleteType = function (cursor, log, detail, print) {
   let state
   let stateStack = []
   let parent = 'block'
-  const structRules = ['PairComplete', 'PairMissValue', 'PairOnlyKey', 'Key', 'ValuePair', 'ValueArray', 'ValueObject']
+  const structRules = ['PairComplete', 'PairMissValue', 'PairOnlyOP', 'PairOnlyKey', 'Key', 'ValuePair', 'ValueArray', 'ValueObject']
   const valueTypes = [ 'true', 'false', 'null', 'String', 'SimpleString', 'Number', 'RegularExpression' ]
   // get structure for this object
   for (let each of related) {
@@ -276,6 +279,9 @@ Tracer.prototype.getAutocompleteType = function (cursor, log, detail, print) {
       stateStack.push({ type, start, end, result})
       state = type
     } else if (type === 'PairMissValue') {
+      stateStack.push({ type, start, end, result})
+      state = type
+    } else if (type === 'PairOnlyOP') {
       stateStack.push({ type, start, end, result})
       state = type
     } else if (type === 'PairOnlyKey') {
@@ -311,7 +317,7 @@ Tracer.prototype.getAutocompleteType = function (cursor, log, detail, print) {
     }
     if (type === 'ws00' && (start<cursor && cursor<end)) {
       // select field, complete: insert into cursor position, extract: ""
-      output = {type: 'key', subtype: 'fieldKey', complete: 'insert', extract:"", start: cursor, end:cursor}
+      output = {type: 'key', subtype: 'fieldKey', complete: 'insert', extract:[], start: cursor, end:cursor}
       break
     } else if (type === 'ws01' && (start<cursor && cursor<=end)) {
       // select field, complete: insert into cursor position, extract: ""
@@ -334,6 +340,11 @@ Tracer.prototype.getAutocompleteType = function (cursor, log, detail, print) {
       output = {type: 'value', subtype: 'arrayValue', complete: 'insert', extract:"", start: cursor, end:cursor, stateStack}
       break
     } else if (type === 'ValueBlock') {
+      if (value.type === 'SimpleString') {
+        if (value.result.indexOf('.')>=0) {
+
+        }
+      }
       output = {
         type: 'key',
         subtype: type,
@@ -352,7 +363,7 @@ Tracer.prototype.getAutocompleteType = function (cursor, log, detail, print) {
         subtype: 'objectKey',
         valueType: value.type,
         complete: 'replace',
-        extract:String(value.result), // string
+        extract:[String(value.result)], // string
         start: value.start,
         end: value.end,
         value,
@@ -375,7 +386,7 @@ Tracer.prototype.getAutocompleteType = function (cursor, log, detail, print) {
         stateStack,
       }
       break
-    } else if (type === 'Key' || type === 'KeyPlus') { // no more level under key
+    } else if (type === 'Key' || type === 'KeyOP' || type === 'KeyKey') { // no more level under key
       value = each
       let valueType = 'key'
       let keyString = this.content.slice(start, end+1)
@@ -395,7 +406,7 @@ Tracer.prototype.getAutocompleteType = function (cursor, log, detail, print) {
       let extract
       if (rawExtract.length === 1) { // for subfields
         let subfields = rawExtract[0].split('.')
-        if (subfields.length > 0) {
+        if (subfields.length > 1) {
           keyIndex = 0
           lastEnd = 0
           for (let index=start+1; index<=cursor; index++) { // for operations
@@ -698,8 +709,86 @@ Parser.prototype.analysis = function (cursor) {
   return {result, analysis, autocomplete}
 }
 
+// general operations
+let OP_global = {
+  $exists: {description:'exists', type:'boolean'},
+  $type: {description:'exists', type:'number'},
+}
+let OP_string = {
+  $lt: { description:"<", type:'string' },
+  $gt: { description:">", type:'string' },
+  $lte: { description:"<=", type:'string' },
+  $gte: { description:">=", type:'string' },
+  $ne: { description:"!=", type:'string' },
+  $in: { description:'in', type: ['string', 'regexp'], array: true },
+  $nin: { description:'in', type: ['string', 'regexp'], array: true },
+}
+let OP_number = {
+  $lt: { description:"<", type:'number' },
+  $gt: { description:">", type:'number' },
+  $lte: { description:"<=", type:'number' },
+  $gte: { description:">=", type:'number' },
+  $ne: { description:"!=", type:'number' },
+  $in: { description:'in', type: 'number', array: true },
+  $nin: { description:'in', type: 'number', array: true },
+}
+let OP_date = {
+  $lt: { description:"<", type:'date' },
+  $gt: { description:">", type:'date' },
+  $lte: { description:"<=", type:'date' },
+  $gte: { description:">=", type:'date' },
+}
+let OP_array = {
+  $lt: { description:"<", type:'unknown' },
+  $gt: { description:">", type:'unknown' },
+  $lte: { description:"<=", type:'unknown' },
+  $gte: { description:">=", type:'unknown' },
+  $ne: { description:">=", type:'unknown' },
+  $in: { description:'in', type: 'unknown', array: true },
+  $nin: { description:'in', type: 'unknown', array: true },
+  $elemMatch: {
+    description:'elemMatch',
+    type: 'unknown',
+    fields: {
+      $lt: { description:"<", type:'unknown' },
+      $gt: { description:">", type:'unknown' },
+      $lte: { description:"<=", type:'unknown' },
+      $gte: { description:">=", type:'unknown' },
+      $ne: { description:"!=", type:'unknown' },
+      $in: { description:'in', type: 'unknown', array: true },
+      $nin: { description:'in', type: 'unknown', array: true },
+      $not: { description:'&&', type: 'object', array: true },
+      $and: { description:'~', type: 'object', array: true },
+      $or: { description:'||', type: 'object', array: true },
+    }
+  }
+}
+let OP_array_number = JSON.parse(JSON.stringify(OP_array,
+  function (key, value) { if(key==='type' && value==='unknown') {return 'number'} else {return value} })
+)
+let OP_array_date = JSON.parse(JSON.stringify(OP_array,
+  function (key, value) { if(key==='type' && value==='unknown') {return 'number'} else {return value} })
+)
+let OP_array_string = JSON.parse(JSON.stringify(OP_array,
+  function (key, value) { if(key==='type' && value==='unknown') {return 'string'} else {return value} })
+)
+let operations = {
+  'string': {
+
+  }
+}
+
+function findPath (struct, path) {
+  let thisStruct = struct
+  let history = []
+  for (let step of path) {
+    if (step in thisStruct.fields) {
+      thisStruct = thisStruct.fields[step]
+    }
+  }
+}
 Parser.prototype.autocomplete = function (input) {
-  const pairKeys = ["PairComplete", "PairMissValue", 'PairOnlyKey']
+  const pairKeys = ["PairComplete", "PairMissValue", 'PairOnlyOP', 'PairOnlyKey']
   let {type, subtype, valueType, stateStack, extract} = input
   if (!type || !this.struct) return {type: null} // not good cursor position for auto complete
   let path = []
@@ -735,7 +824,7 @@ Parser.prototype.autocomplete = function (input) {
     if (type === 'key') { // for nested key operations
       let keys
       if (Array.isArray(extract[0]) && extract.length === 1) {
-        keys = extract
+        keys = [...extract]
         keys[0] = keys[0].slice(0,-1)
       } else {
         keys = extract.slice(0,-1)
@@ -767,11 +856,12 @@ Parser.prototype.autocomplete = function (input) {
   }
   console.log(input, path)
 
-  if (type === 'fieldKey') {
+  if (type === 'key') {
 
-  } else if (type === 'key') {
+  } else if (type === 'value') {
 
   }
+  return {path}
 }
 
 module.exports = {

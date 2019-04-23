@@ -64,7 +64,6 @@ Block "block"
   / NestedPairBlock
   / NestedValueBlock
   / Pair
-  / PairOnlyKey
   / ValueBlock
 
 NestedORBlock 'nestedorblock'
@@ -187,6 +186,40 @@ Pair "pair"
       return {[key]: value}
     }
   }
+  / v:PairOnlyOP {
+    let {keys} = v
+    if (keys.length===1) {
+      return {[keys[0]]: null}
+    } else {
+      keys = keys.map(_ => _)
+      let key = keys.splice(0,1)[0]
+      let pop = keys.pop()
+      let value = {[`\$${pop}`]: null}
+      let length = keys.length
+      for (let i=0; i<length; i++) {
+        pop = keys.pop()
+        value = {[`\$${pop}`]: value}
+      }
+      return {[key]: value}
+    }
+  }
+  / v:PairOnlyKey {
+    let {keys} = v
+    if (keys.length===1) {
+      return {[keys[0]]: null}
+    } else {
+      keys = keys.map(_ => _)
+      let key = keys.splice(0,1)[0]
+      let pop = keys.pop()
+      let value = {[`\$${pop}`]: null}
+      let length = keys.length
+      for (let i=0; i<length; i++) {
+        pop = keys.pop()
+        value = {[`\$${pop}`]: value}
+      }
+      return {[key]: value}
+    }
+  }
 
 PairComplete
   = keys:Key ws PairSeperator ws value:ValuePair {
@@ -196,9 +229,17 @@ PairMissValue
   = keys:Key ws ws01PS {
     return {keys}
   }
+PairOnlyOP "paironlyop"
+  = keys:KeyOP {
+      return {keys}
+    }
+PairOnlyKey "paironlykey"
+  = keys:KeyKey {
+      return {keys}
+    }
 
 ws01PS "pws01"
-  = PairSeperator ws? 
+  = PairSeperator ws?
 
 OPSeperator
   = '|'
@@ -209,24 +250,16 @@ PairSeperator
 OP "op"
   = chars:[0-9a-zA-Z_$]+ { return chars.join("") }
 
-PairOnlyKey "paironlykey"
-  = v:PairKey {
-      return v.keys.join('|')
-    }
 
-PairKey "pairkey"
-  = keys:KeyPlus {
-      return {keys}
-    }
-
+// 'blockValue||' is invalided
 Key "key"
   = head:KeyValue
     middle:(
-      ws OPSeperator ws op:OP
+      OPSeperator op:OP
       { return op }
     )*
     tail:(
-      ws OPSeperator
+      OPSeperator
     )?
     {
       if (tail === null) {
@@ -236,29 +269,34 @@ Key "key"
       }
     }
 
-KeyPlus "keyplus"
+KeyOP "keyop"
   = head:KeyValue
     middle:(
-      ws OPSeperator ws op:OP
+      OPSeperator op:OP
       { return op }
-    )+
-    tail:(
-      ws OPSeperator
-    )?
+    )*
+    OPSeperator ! '|'
     {
-      if (tail === null) {
-        return [head].concat(middle)
-      } else {
-        return [head].concat(middle).concat([""])
-      }
+      return [head].concat(middle).concat([""])
+    }
+
+KeyKey "keykey"
+  = head:SimpleStringKey
+    & { if (head.indexOf('.')>=0) return true }
+    {
+      return [head]
     }
 
 KeyValue "keyvalue"
   = String
-  / SimpleString
+  / SimpleStringKey
   / Number
 
+
 SimpleString "simpleString"
+  = prefix:[a-zA-Z_$<>=] suffix:[0-9a-zA-Z_$<>+\-=]* { return prefix + suffix.join(""); }
+
+SimpleStringKey "simpleString"
   = prefix:[a-zA-Z_$<>=] suffix:[0-9a-zA-Z_$.<>+\-=]* { return prefix + suffix.join(""); }
 
 // ----- Numbers ----- from https://github.com/pegjs/pegjs/blob/master/examples/json.pegjs

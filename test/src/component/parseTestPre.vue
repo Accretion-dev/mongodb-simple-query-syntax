@@ -78,17 +78,14 @@ export default {
   },
   computed: {
     debug () {
-      let result, analysis
       if (!this.parser) return null
-      let _ = this.parser.analysis(this.cursor)
-      result = _.result
-      analysis = _.analysis
+      let result = this.parser.analysis(this.cursor)
       let sel = window.getSelection()
       let range = document.createRange()
       let pre = this.$refs.pre
       if (pre) {
         this.$nextTick(() => {
-          if (typeof(analysis.print) === 'string') {
+          if (typeof(result.analysis.print) === 'string') {
             range.setStart(pre.childNodes[0], this.cursor)
             range.collapse(true)
             sel.removeAllRanges()
@@ -102,7 +99,7 @@ export default {
           }
         })
       }
-      return {result, analysis}
+      return result
     }
   },
   created () {
@@ -112,7 +109,7 @@ export default {
   },
   methods: {
     onChangeInput () {
-      this.parser = new Parser({struct: this.struct, options:{print: true}})
+      this.parser = new Parser({struct: this.struct, options:{print: true, logFull: false}})
       let result = this.parser.parse({content: this.content})
       if (!equal(result, this.contentObj)) {
         console.log({expect: this.contentObj, actual: result})
