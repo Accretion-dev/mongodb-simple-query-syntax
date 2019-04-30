@@ -5,7 +5,8 @@
   "scripts": {
     "test": "vue-cli-service serve",
     "selenium-test": "nodemon --watch run-backend.js --exec 'babel-node --inspect run-backend.js --presets=env'",
-    "ava": "nodemon --watch ava.js --watch ../index.js --watch ../mongodb-simple-query-syntax.js --exec 'babel-node --presets=env --inspect -- node_modules/ava/profile.js ava.js'",
+    "ava": "nodemon --watch ava.js --watch '../*.js' --exec 'babel-node --presets=env --inspect -- node_modules/ava/profile.js ava.js'",
+    "date": "nodemon --watch test-luxon.js --exec 'babel-node --presets=env --inspect -- test-luxon.js'",
     "serve": "vue-cli-service serve",
     "build": "vue-cli-service build",
     "lint": "vue-cli-service lint"

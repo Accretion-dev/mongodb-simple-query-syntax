@@ -29,8 +29,9 @@
              contenteditable="true"
         >{{debug.analysis.print.head}}<span class='highlight'>{{debug.analysis.print.middle}}</span>{{debug.analysis.print.tail}}</pre>
       </template>
-      <pre>analysis: {{JSON.stringify(lodash.pick(debug.analysis, ['type', 'complete', 'valueType', 'start', 'end', 'lastEnd', 'extract', 'result']))}}</pre>
-      <pre>antocomplete: {{JSON.stringify(debug.autocomplete)}}</pre>
+      <pre>analysis: {{JSON.stringify(lodash.pick(debug.analysis, ['type', 'complete', 'valueType', 'result']))}}</pre>
+      <pre>extract: {{JSON.stringify(debug.analysis.extract)}}</pre>
+      <pre>path:    {{JSON.stringify(debug.autocomplete.path)}}</pre>
       <template v-if="debug.analysis.printKey">
         <template v-if="typeof(debug.analysis.printKey)==='string'">
           <pre>{{debug.analysis.printKey}}</pre>
