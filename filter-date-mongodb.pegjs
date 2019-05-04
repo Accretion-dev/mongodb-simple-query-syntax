@@ -6,7 +6,6 @@ start
   / filter:StartAND      value:LastValueBlock? { if (value===null) {return {filter}} else {return {filter, value}} }
   / filter:StartNOT      value:LastValueBlock? { if (value===null) {return {filter}} else {return {filter, value}} }
   / filter:StartBlock    value:LastValueBlock? { if (value===null) {return {filter}} else {return {filter, value}} }
-  / filter:StartFunction value:LastValueBlock? { if (value===null) {return {filter}} else {return {filter, value}} }
   / value:LastValueBlock {return {value}}
 
 StartOR "startor"
@@ -17,22 +16,6 @@ StartNOT "startnot"
   = ws10 filter:NOT   ws01 { return filter }
 StartBlock "startblock"
   = ws10 filter:Block ws01 { return filter }
-StartFunction "startfunction"
-  = ws10 rawsource:String ws01 {
-    let lines = rawsource.split(';')
-    lines[lines.length-1] = 'return ' + lines[lines.length-1]
-    let pre=`
-      if (v instanceof Date) {
-        v = DateTime.fromJSDate(input)
-      } else if (typeof(v) === 'string') {
-        v = DateTime.fromISO(input)
-      }
-    `
-    lines = [pre].concat(lines)
-    let source = lines.join(';')
-    let filter = new Function('v', source)
-    return filter
-  }
 
 ws "whitespace"
   = chars:[ \t\n\r]* { return chars.join("") }
@@ -51,26 +34,14 @@ OR "or"
   = head:ANDBlock
     tail:(ws01 ORSeperator ws10 filter:ANDBlock { return filter })+
     {
-      return function (input) {
-        let all = [head].concat(tail)
-        for (let each of all) {
-          if (each(input)) return true
-        }
-        return false
-      }
+      return {$or: [head].concat(tail)}
     }
 
 AND "and"
   = head:NOTBlock
-    tail:(ANDSeperator ws10 filter:NOTBlock { return filter })+
+    tail:(ANDSeperator ws10 filter:Block { return filter })+
     {
-      return function (input) {
-        let all = [head].concat(tail)
-        for (let each of all) {
-          if (!each(input)) return false
-        }
-        return true
-      }
+      return {$and: [head].concat(tail)}
     }
 
 ANDBlock "andblock"
@@ -80,10 +51,9 @@ ANDBlock "andblock"
 NOTBlock "notblock"
   = NOT
   / Block
-
 NOT "not"
   = NOTSeperator ws filter:Block {
-    return function (input) { return !filter(input)}
+    return {$not:[filter]}
   }
 
 Block "block"
@@ -154,7 +124,6 @@ DeltaTime 'deltatime'
     } else {
       then = now.minus(deltaDict)
     }
-    console.log(then.toISO())
     return {type: 'datetime', value: then}
   }
 
@@ -194,144 +163,139 @@ LastValueBlock "lastvalue"
 
 ValueBlock "value"
   = op:OP datetime:DateTimeBlock {
+    let date = "$$date"
+    let left = {$dateToString: {date}}
     if (datetime.type === 'datetime') {
-      return function(input) {
-        let time = DateTime.fromISO(datetime.value)
-        let inputDate
-        if (input instanceof Date) {
-          inputDate = DateTime.fromJSDate(input)
-        } else if (typeof(input) === 'string') {
-          inputDate = DateTime.fromISO(input)
-        } else if (input instanceof DateTime) {
-          inputDate = input
-        }
-        let left = inputDate
-        let right = time
-        if (op === '>=') {
-          return left >= right
-        } else if (op === '<=') {
-          return left <= right
-        } else if (op === '>') {
-          return left > right
-        } else if (op === '<') {
-          return left < right
-        } else if (op === 'in:') {
-          throw Error('can not in a datetime, use <> opretions')
-        }
+      let time = DateTime.fromISO(datetime.value)
+      let right = time.toUTC().toISO()
+      if (op === '>=') {
+        return {$gte: [left, right]}
+      } else if (op === '<=') {
+        return {$lte: [left, right]}
+      } else if (op === '>') {
+        return {$gt: [left, right]}
+      } else if (op === '<') {
+        return {$lt: [left, right]}
+      } else if (op === 'in:') {
+        throw Error('can not in a datetime, use <> opretions')
       }
     } else if (datetime.type === 'date') {
-      return function(input) {
-        let inputDate
-        if (input instanceof Date) {
-          inputDate = DateTime.fromJSDate(input)
-        } else if (typeof(input) === 'string') {
-          inputDate = DateTime.fromISO(input)
-        } else if (input instanceof DateTime) {
-          inputDate = input
-        }
-        let {year, month, day, weekday, type} = datetime.value
-        let time = DateTime.fromObject({year, month, day, weekday})
-        let end
-        if (type === 'ymd') {
-          end = time.endOf('day')
-        } else if (type === 'ym') {
-          end = time.endOf('month')
-        } else if (type === 'y') {
-          end = time.endOf('year')
-        }
-        if (end) { // ymd, ym, y
-          if (op === '>=') {
-            return inputDate >= time
-          } else if (op === '<=') {
-            return inputDate <= time
-          } else if (op === '>') {
-            return inputDate > time
-          } else if (op === '<') {
-            return inputDate < time
-          } else if (op === 'in:') {
-            return inputDate >= time && inputDate <= end
+      let {year, month, day, weekday, type} = datetime.value
+      let time = DateTime.fromObject({year, month, day, weekday})
+      let end
+      if (type === 'ymd') {
+        end = time.endOf('day')
+      } else if (type === 'ym') {
+        end = time.endOf('month')
+      } else if (type === 'y') {
+        end = time.endOf('year')
+      }
+      if (end) { // ymd, ym, y
+        let right = time.toUTC().toISO()
+        if (op === '>=') {
+          return {$gte: [left, right]}
+        } else if (op === '<=') {
+          return {$lte: [left, right]}
+        } else if (op === '>') {
+          return {$gt: [left, right]}
+        } else if (op === '<') {
+          return {$lt: [left, right]}
+        } else if (op === 'in:') {
+          return {$and:[
+              {$gte:[left, time.toUTC().toISO()]},
+              {$lte:[left,  end.toUTC().toISO()]},
+            ]
           }
-        } else {
-          if (type === 'md') {
-            month = Number(month)
-            day = Number(day)
-            if (op === '>=') {
-              return inputDate.month >= month && inputDate.day >= day
-            } else if (op === '<=') {
-              return inputDate.month <= month && inputDate.day <= day
-            } else if (op === '>') {
-              return inputDate.month >= month && inputDate.day > day
-            } else if (op === '<') {
-              return inputDate.month <= month && inputDate.day < day
-            } else if (op === 'in:') {
-              return inputDate.month === month && inputDate.day === day
-            }
-          } else if (type === 'd') {
-            day = Number(day)
-            if (op === '>=') {
-              return inputDate.day >= day
-            } else if (op === '<=') {
-              return inputDate.day <= day
-            } else if (op === '>') {
-              return inputDate.day > day
-            } else if (op === '<') {
-              return inputDate.day < day
-            } else if (op === 'in:') {
-              return inputDate.day === day
-            }
-          } else if (type === 'm') {
-            month = Number(month)
-            if (op === '>=') {
-              return inputDate.month >= month
-            } else if (op === '<=') {
-              return inputDate.month <= month
-            } else if (op === '>') {
-              return inputDate.month > month
-            } else if (op === '<') {
-              return inputDate.month < month
-            } else if (op === 'in:') {
-              return inputDate.month === month
-            }
-          } else if (type === 'w') {
-            weekday = Number(weekday)
-            if (op === '>=') {
-              return inputDate.weekday >= weekday
-            } else if (op === '<=') {
-              return inputDate.weekday <= weekday
-            } else if (op === '>') {
-              return inputDate.weekday > weekday
-            } else if (op === '<') {
-              return inputDate.weekday < weekday
-            } else if (op === 'in:') {
-              return inputDate.weekday === weekday
-            }
+        }
+      } else {
+        if (type === 'md') {
+          month = Number(month)
+          day = Number(day)
+          let timezone = DateTime.local().zone.name
+          if (op === '>=') {
+            return {$and: [
+              {$gte: [{$month:{ date, timezone }}, month] },
+              {$gte: [{$day:{ date, timezone }}, day] },
+            ]}
+          } else if (op === '<=') {
+            return {$and: [
+              {$lte: [{$month:{ date, timezone }}, month] },
+              {$lte: [{$day:{ date, timezone }}, day] },
+            ]}
+          } else if (op === '>') {
+            return {$and: [
+              {$gte: [{$month:{ date, timezone }}, month] },
+              {$gt: [{$day:{ date, timezone }}, day] },
+            ]}
+          } else if (op === '<') {
+            return {$and: [
+              {$lte: [{$month:{ date, timezone }}, month] },
+              {$lt: [{$day:{ date, timezone }}, day] },
+            ]}
+          } else if (op === 'in:') {
+            return {$and: [
+              {$eq: [{$month:{ date, timezone }}, month] },
+              {$eq: [{$day:{ date, timezone }}, day] },
+            ]}
+          }
+        } else if (type === 'd') {
+          day = Number(day)
+          let timezone = DateTime.local().zone.name
+          if (op === '>=') {
+            return {$gte: [{$day:{ date, timezone }}, day] }
+          } else if (op === '<=') {
+            return {$lte: [{$day:{ date, timezone }}, day] }
+          } else if (op === '>') {
+            return {$gt: [{$day:{ date, timezone }}, day] }
+          } else if (op === '<') {
+            return {$lt: [{$day:{ date, timezone }}, day] }
+          } else if (op === 'in:') {
+            return {$eq: [{$day:{ date, timezone }}, day] }
+          }
+        } else if (type === 'm') {
+          month = Number(month)
+          let timezone = DateTime.local().zone.name
+          if (op === '>=') {
+            return {$gte: [{$month:{ date, timezone }}, month] }
+          } else if (op === '<=') {
+            return {$lte: [{$month:{ date, timezone }}, month] }
+          } else if (op === '>') {
+            return {$gt: [{$month:{ date, timezone }}, month] }
+          } else if (op === '<') {
+            return {$lt: [{$month:{ date, timezone }}, month] }
+          } else if (op === 'in:') {
+            return {$eq: [{$month:{ date, timezone }}, month] }
+          }
+        } else if (type === 'w') {
+          weekday = Number(weekday)
+          let timezone = DateTime.local().zone.name
+          if (op === '>=') {
+            return {$gte: [{$dayOfWeek:{ date, timezone }}, weekday] }
+          } else if (op === '<=') {
+            return {$lte: [{$dayOfWeek:{ date, timezone }}, weekday] }
+          } else if (op === '>') {
+            return {$gt: [{$dayOfWeek:{ date, timezone }}, weekday] }
+          } else if (op === '<') {
+            return {$lt: [{$dayOfWeek:{ date, timezone }}, weekday] }
+          } else if (op === 'in:') {
+            return {$eq: [{$dayOfWeek:{ date, timezone }}, weekday] }
           }
         }
       }
     } else if (datetime.type === 'time') {
-      return function(input) {
-        let time = DateTime.fromISO(datetime.value)
-        let inputDate
-        if (input instanceof Date) {
-          inputDate = DateTime.fromJSDate(input)
-        } else if (typeof(input) === 'string') {
-          inputDate = DateTime.fromISO(input)
-        } else if (input instanceof DateTime) {
-          inputDate = input
-        }
-        let left = inputDate.toUTC().toISOTime()
-        let right = time.toUTC().toISOTime()
-        if (op === '>=') {
-          return left >= right
-        } else if (op === '<=') {
-          return left <= right
-        } else if (op === '>') {
-          return left > right
-        } else if (op === '<') {
-          return left < right
-        } else if (op === 'in:') {
-          throw Error('can not in a time, use <> opretions')
-        }
+      let time = DateTime.fromISO(datetime.value)
+      let left = {$dateToString: {date, format:"%H:%M:%S.%LZ"}}
+      let right = time.toUTC().toISOTime()
+      if (op === '>=') {
+        return {$gte: [left, right]}
+      } else if (op === '<=') {
+        return {$lte: [left, right]}
+      } else if (op === '>') {
+        return {$gt: [left, right]}
+      } else if (op === '<') {
+        return {$lt: [left, right]}
+      } else if (op === 'in:') {
+        throw Error('can not in a time, use <> opretions')
       }
     }
   }

@@ -1,4 +1,4 @@
-let {DateTime, Duration, Interval} = require('luxon')
+let {DateTime, Duration, Interval, Info} = require('luxon')
 let rawnow = new Date()
 let now = DateTime.local()
 let start = now.startOf('day')
