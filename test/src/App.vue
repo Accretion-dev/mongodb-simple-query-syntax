@@ -40,7 +40,7 @@ let testData = {
     content:  `
       $title|startsWith: 'foo bar' ||
       'tags'|elemMatch:{tagname|startsWith: astro, time|lt: } ||
-      tags.tag_name: 'good' && ~(tags.time|lt: '2018') ||
+      tags.tag_name: 'good' && (tags.time|lt: '2018') ||
       tags.tag_name|in:[
         foo, bar, 'a\\'b', {foo:bar},
       ] ||
@@ -50,10 +50,10 @@ let testData = {
       simple|level1|level2|level3 : s123 ||
       simple|level1|level2| : s12$ ||
       simple|level1|level2| :||
-      ~not|level|test| : ||
+      not|level|test|not| : ||
       test.more.than.extra|one|space| :    ||
       'string.more.than.extra'|one|space| :    ||
-      (foo:foo && bar:bar || ~foobar:foobar && barfoo:barfoo) ||
+      (foo:foo && bar:bar || foobar:foobar && barfoo:barfoo) ||
       ( (unfinished0) unfinished1) ||
       'unfinished2' ||
       unfinished3: {
@@ -71,7 +71,11 @@ let testData = {
       partDot. ||
       partOP| ||
       partOP1|op|op| ||
-      partOP2.nice.good.great|op|op|
+      partOP2.nice.good.great|op|op|: [
+        123, {inner.region|in:[
+          456, {inner.inner|in: 567}
+        ]}
+      ]
       `,
     contentObj: {$or: [
       {$title: {$startsWith: 'foo bar'}},
@@ -81,7 +85,7 @@ let testData = {
       }}},
       {$and: [
         {'tags.tag_name': 'good'},
-        {$not: {'tags.time': {$lt: '2018'}}},
+        {'tags.time': {$lt: '2018'}},
       ]},
       {'tags.tag_name':{$in:['foo', 'bar', 'a\'b', {foo:'bar'}]}},
       {halftype: null},
@@ -90,12 +94,12 @@ let testData = {
       {simple:{$level1:{$level2:{$level3: 's123'}}}},
       {simple:{$level1:{$level2:{$: 's12$'}}}},
       {simple:{$level1:{$level2:{$: null}}}},
-      {$not:{not: {$level:{$test:{$: null}}}}},
+      {not: {$level:{$test:{$not: {$: null}}}}},
       {'test.more.than.extra':{$one:{$space:{$: null}}}},
       {'string.more.than.extra':{$one:{$space:{$: null}}}},
       {$or: [
         {$and: [{foo:"foo"}, {bar:"bar"}]},
-        {$and: [{$not: {foobar:"foobar"}}, {barfoo: "barfoo"}]}
+        {$and: [{foobar:"foobar"}, {barfoo: "barfoo"}]}
       ]},
       {$and: ['unfinished0', 'unfinished1']},
       'unfinished2',
@@ -119,11 +123,14 @@ let testData = {
       {'partDot.': null},
       {partOP:{$:null}},
       {partOP1:{$op:{$op:{$:null}}}},
-      {'partOP2.nice.good.great':{$op:{$op: {$: null}}}},
+      {'partOP2.nice.good.great':{$op:{$op: {$: [
+        123, {'inner.region':{$in: [
+          456, {'inner.inner': {$in: 567}}
+        ]}}
+      ]}}}},
     ]}
   }
 }
-
 
 export default {
   name: 'test-app',

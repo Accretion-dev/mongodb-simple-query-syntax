@@ -1,5 +1,7 @@
 const path = require('path')
 let {SyntaxError, parse} = require('./mongodb-simple-query-syntax.js')
+let {parse: NumberParser} = require('./filter-number.js')
+let {parse: DateParser} = require('./filter-date.js')
 
 /*
 TODO:
@@ -83,6 +85,26 @@ TODO:
 
 */
 
+
+/*
+  compile dict parsed from Tracer to a valid mongodb query
+  also define final project
+  things to do
+  * special syntax in the top level
+    * try to find several ValueBlock in the last ANDBlock
+      and compile them into a $text|search: array.join(' '),
+        if top is $and, put the $text search into the top level
+        if top is $or, add another $and
+      also sorted by score
+    * parse time query
+    * support $length operation
+  * remove all __keys__ in oubject
+  * convert value based on field types
+*/
+function compile (dict) {
+
+}
+
 function replacer(key, value) {
   if (value instanceof RegExp) {
     return ("__REGEXP " + value.toString())
@@ -112,7 +134,6 @@ let JSONEX = {
   },
 }
 //console.log(JSON.parse(JSON.stringify(o, replacer, 2), reviver));
-
 
 let demoStruct = {
   description: 'root fields',
@@ -291,6 +312,9 @@ Tracer.prototype.getAutocompleteType = function (cursor, log, detail, print) {
       stateStack.push({ type, start, end, result })
       state = type
     } else if (type === 'Array') {
+      stateStack.push({ type, start, end, result })
+      state = type
+    } else if (type === 'ArrayWrapper') {
       stateStack.push({ type, start, end, result })
       state = type
     }
@@ -561,6 +585,7 @@ Tracer.prototype.getAutocompleteType = function (cursor, log, detail, print) {
       this.retrace(each)
     }
   }
+  output.cursor = cursor
   return output
 }
 Tracer.prototype.traceback = function () {
@@ -709,10 +734,44 @@ Parser.prototype.analysis = function (cursor) {
   return {result, analysis, autocomplete}
 }
 
+
+/*
+TODO:
+  * finish compile
+  * find extract path(with array index)
+  * finish data-mongodb filter syntax
+*/
+
 // general operations
 let OP_global = {
   $exists: {description:'exists', type:'boolean'},
-  $type: {description:'exists', type:'number'},
+  $type: {description:'type', type:'number'},
+}
+let OP_EXPR = {
+  $expr: {
+    description:'expr', type:'expr',
+    fields: {
+      $and: { description:"and", type:'expr', array:true},
+      $or: { description:"or", type:'expr', array:true},
+      $not: { description:"not", type:'expr'},
+      $eq: { description:"==", type:'expr', array:true},
+      $lt: { description:"<", type:'expr', array:true},
+      $gt: { description:">", type:'expr', array:true},
+      $lte: { description:"<=", type:'expr', array:true},
+      $gte: { description:">=", type:'expr', array:true},
+      $ne: { description:"!=", type:'expr', array:true},
+      $cond: { description:"cond", type:'expr'},
+      if: { description:"if", type:'expr'},
+      then: { description:"then", type:'expr'},
+      else: { description:"else", type:'expr'},
+      $abs: { description:"abs", type:'fields'},
+      $hour: { description:"hour", type:'fields'},
+      $minute: { description:"minute", type:'fields'},
+      $day: { description:"day", type:'fields'},
+      $month: { description:"month", type:'fields'},
+      $year: { description:"year", type:'fields'},
+    }
+  },
 }
 let OP_string = {
   $lt: { description:"<", type:'string' },
@@ -721,7 +780,7 @@ let OP_string = {
   $gte: { description:">=", type:'string' },
   $ne: { description:"!=", type:'string' },
   $in: { description:'in', type: ['string', 'regexp'], array: true },
-  $nin: { description:'in', type: ['string', 'regexp'], array: true },
+  $nin: { description:'nin', type: ['string', 'regexp'], array: true },
 }
 let OP_number = {
   $lt: { description:"<", type:'number' },
@@ -729,8 +788,8 @@ let OP_number = {
   $lte: { description:"<=", type:'number' },
   $gte: { description:">=", type:'number' },
   $ne: { description:"!=", type:'number' },
-  $in: { description:'in', type: 'number', array: true },
-  $nin: { description:'in', type: 'number', array: true },
+  $in: { description:'in', type: 'array', array: true },
+  $nin: { description:'nin', type: 'array', array: true },
 }
 let OP_date = {
   $lt: { description:"<", type:'date' },
@@ -745,22 +804,10 @@ let OP_array = {
   $gte: { description:">=", type:'unknown' },
   $ne: { description:">=", type:'unknown' },
   $in: { description:'in', type: 'unknown', array: true },
-  $nin: { description:'in', type: 'unknown', array: true },
+  $nin: { description:'nin', type: 'unknown', array: true },
   $elemMatch: {
     description:'elemMatch',
-    type: 'unknown',
-    fields: {
-      $lt: { description:"<", type:'unknown' },
-      $gt: { description:">", type:'unknown' },
-      $lte: { description:"<=", type:'unknown' },
-      $gte: { description:">=", type:'unknown' },
-      $ne: { description:"!=", type:'unknown' },
-      $in: { description:'in', type: 'unknown', array: true },
-      $nin: { description:'in', type: 'unknown', array: true },
-      $not: { description:'&&', type: 'object', array: true },
-      $and: { description:'~', type: 'object', array: true },
-      $or: { description:'||', type: 'object', array: true },
-    }
+    type: 'subroot'
   }
 }
 let OP_array_number = JSON.parse(JSON.stringify(OP_array,
@@ -772,11 +819,6 @@ let OP_array_date = JSON.parse(JSON.stringify(OP_array,
 let OP_array_string = JSON.parse(JSON.stringify(OP_array,
   function (key, value) { if(key==='type' && value==='unknown') {return 'string'} else {return value} })
 )
-let operations = {
-  'string': {
-
-  }
-}
 
 function findPath (struct, path) {
   let thisStruct = struct
@@ -788,36 +830,44 @@ function findPath (struct, path) {
   }
 }
 Parser.prototype.autocomplete = function (input) {
-  const pairKeys = ["PairComplete", "PairMissValue", 'PairOnlyOP', 'PairOnlyKey']
-  let {type, subtype, valueType, stateStack, extract} = input
+  const pairKeys = ["PairComplete", "PairMissValue", 'PairOnlyOP', 'PairOnlyKey', 'ArrayWrapper']
+  let {type, subtype, valueType, stateStack, extract, cursor} = input
   if (!type || !this.struct) return {type: null} // not good cursor position for auto complete
   let path = []
+  console.log('stateStack:', stateStack)
   if (stateStack && subtype !== 'ValueBlock') {
     let parentStacks = type === 'key' ? stateStack.slice(0,-1) : stateStack
     for (let item of parentStacks) { // for value
       if (!pairKeys.includes(item.type)) continue
-      let keys = item.result.keys
-      if (keys.length === 1) {
-        if (keys[0].indexOf('.')>=0) {
-          let subkeys = keys[0].split('.')
-          for (let subkey of subkeys) {
-            if (subkey) path.push(subkey)
-          }
-        } else {
-          path.push(keys[0])
+      if (item.type === 'ArrayWrapper') {
+        let index = item.result.findIndex(_ => _.location.start.offset<=cursor && cursor<=_.location.end.offset)
+        if (index !== -1) {
+          path.push(index)
         }
-      } else if (keys.length > 1) {
-        if (keys[0].indexOf('.')>=0) {
-          let subkeys = keys[0].split('.')
-          for (let subkey of subkeys) {
-            if (subkey) path.push(subkey)
+      } else {
+        let keys = item.result.keys
+        if (keys.length === 1) {
+          if (keys[0].indexOf('.')>=0) {
+            let subkeys = keys[0].split('.')
+            for (let subkey of subkeys) {
+              if (subkey) path.push(subkey)
+            }
+          } else {
+            path.push(keys[0])
           }
-        } else {
-          path.push(keys[0])
-        }
-        let tails = keys.slice(1)
-        for (let _ of tails) {
-          path.push(`\$${_}`)
+        } else if (keys.length > 1) {
+          if (keys[0].indexOf('.')>=0) {
+            let subkeys = keys[0].split('.')
+            for (let subkey of subkeys) {
+              if (subkey) path.push(subkey)
+            }
+          } else {
+            path.push(keys[0])
+          }
+          let tails = keys.slice(1)
+          for (let _ of tails) {
+            path.push(`\$${_}`)
+          }
         }
       }
     }

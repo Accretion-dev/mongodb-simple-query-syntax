@@ -8,18 +8,17 @@
   }
 }
 
+// Value block shouldd only appear in the outer most level
+// if not, will still pass parse but will not be a valid query
 start
   = StartOR
   / StartAND
-  / StartNOT
   / StartBlock
 
 StartOR "startor"
   = ws10 v:OR    ws01 { return v }
 StartAND "startand"
   = ws10 v:AND   ws01 { return v }
-StartNOT "startnot"
-  = ws10 v:NOT   ws01 { return v }
 StartBlock "startblock"
   = ws10 v:Block ws01 { return v }
 
@@ -42,25 +41,17 @@ OR "or"
     { return {$or: [head].concat(tail)}; }
 
 AND "and"
-  = head:NOTBlock
-    tail:(ANDSeperator ws10 v:NOTBlock { return v; })+
+  = head:Block
+    tail:(ANDSeperator ws10 v:Block { return v; })+
     { return {$and: [head].concat(tail)}; }
 
 ANDBlock "andblock"
   = AND
-  / NOTBlock
-
-NOTBlock "notblock"
-  = NOT
   / Block
-
-NOT "not"
-  = NOTSeperator ws v:Block { return {$not: v} }
 
 Block "block"
   = NestedORBlock
   / NestedANDBlock
-  / NestedNOTBlock
   / NestedPairBlock
   / NestedValueBlock
   / Pair
@@ -70,8 +61,6 @@ NestedORBlock 'nestedorblock'
   = NestedStart ws10 v:OR ws01 NestedEnd  {return v}
 NestedANDBlock 'nestedandblock'
   = NestedStart ws10 v:AND ws01 NestedEnd  {return v}
-NestedNOTBlock 'nestednotblock'
-  = NestedStart ws10 v:NOT ws01 NestedEnd  {return v}
 NestedPairBlock 'nestedpairblock'
   = NestedStart ws10 v:Pair ws01 NestedEnd  {return v}
 NestedValueBlock 'nestedvalueblock'
@@ -135,6 +124,10 @@ ws01Array 'ws01array'
   = ws
 
 Array "array"
+  = v:ArrayWrapper
+    { return v.map(_ => _.value) }
+
+ArrayWrapper "arraywrapper"
   = ArrayStart ws10Array
     values:(
       head:ValueArray ws01Array
@@ -294,10 +287,10 @@ KeyValue "keyvalue"
 
 
 SimpleString "simpleString"
-  = prefix:[a-zA-Z_$<>=] suffix:[0-9a-zA-Z_$<>+\-=]* { return prefix + suffix.join(""); }
+  = prefix:[a-zA-Z_$<>=+\-] suffix:[0-9a-zA-Z_$<>+\-=]* { return prefix + suffix.join(""); }
 
 SimpleStringKey "simpleString"
-  = prefix:[a-zA-Z_$<>=] suffix:[0-9a-zA-Z_$.<>+\-=]* { return prefix + suffix.join(""); }
+  = prefix:[a-zA-Z_$<>=+\-] suffix:[0-9a-zA-Z_$.<>+\-=]* { return prefix + suffix.join(""); }
 
 // ----- Numbers ----- from https://github.com/pegjs/pegjs/blob/master/examples/json.pegjs
 
@@ -306,7 +299,7 @@ ValuePair "value:pair"
 ValueBlock "value:block"
   = Value
 ValueArray "value:array"
-  = Value
+  = value:Value {return {value, location: location()} }
 
 Value "value"
   = ComplexValue

@@ -12,18 +12,18 @@ let tests = {
   'syntax': async ({name, driver, Test, Key, By, until, Button, Origin}) => {
     let data, actions, input,c
     let rootSelector = "#syntax-id"
-    let interval = 30
+    let interval = 10
     let app = await driver.findElement({id: 'app'})
     t = Test.block({name, rootSelector})
     await t.init()
     await t.initScroll()
     let root = await driver.findElement(By.css(rootSelector))
     let plus = await driver.findElement(By.css('#plus'))
-    input = await driver.findElement(By.css('#input'))
+    input = await driver.findElement(By.css('#plus'))
 
     await t.changeComment('test syntax', 1000)
-    await t.actions({actions: {js: 'el.focus();', el:input}})
-    await t.actions({actions: [...Array(545).keys()].map(_ => Key.ARROW_UP), interval})
+    await t.actions({actions: {move: plus}})
+    await t.actions({actions: [...Array(1300).keys()].map(_ => ({click:plus})), interval})
 
     await t.changeComment('all done', 2000)
     await t.changeComment('')
