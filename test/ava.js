@@ -5,6 +5,9 @@ import _date from '../filter-date.js'
 let {parse: DateFilter} = _date
 import _number from '../filter-number.js'
 let {parse: NumberFilter} = _number
+import _mongodb_date from '../filter-date-mongodb.js'
+let {parse: MongodbDateFilter} = _mongodb_date
+const {DateTime} = require('luxon')
 console.log('new run')
 
 function range(start,end,step) {
@@ -84,7 +87,7 @@ let todo, todoObj
 todo = `
   title|startsWith: 'foo bar' ||
   tags|elemMatch:{tagname|startsWith: astro, time|lt: } ||
-  tags.tag_name: 'good' && ~(tags.time|lt: '2018') ||
+  tags.tag_name: 'good' && (tags.time|lt: '2018') ||
   tags.tag_name|in:[
     foo, bar, 'a\\'b',
   ] ||
@@ -111,7 +114,7 @@ todoObj = {$or: [
   }}},
   {$and: [
     {'tags.tag_name': 'good'},
-    {$not: {'tags.time': {$lt: '2018'}}},
+    {'tags.time': {$lt: '2018'}},
   ]},
   {'tags.tag_name':{$in:['foo', 'bar', 'a\'b']}},
   {halftype: null},
@@ -185,19 +188,20 @@ test('test complex parser', t => {
   ]
   for (let each of numbers) {
     result = parse(String(each), {tracer: blanktracer})
-    t.is(Number(each), result)
+    if (!result.$and) debugger
+    t.is(Number(each), result.$and[0])
     result = parse(" "+String(each), {tracer: blanktracer})
-    t.is(Number(each), result)
+    t.is(Number(each), result.$and[0])
     result = parse(String(each)+" ", {tracer: blanktracer})
-    t.is(Number(each), result)
+    t.is(Number(each), result.$and[0])
     result = parse(" "+String(each)+" ", {tracer: blanktracer})
-    t.is(Number(each), result)
+    t.is(Number(each), result.$and[0])
   }
   // strings
-  same(['hehehe', `'hehehe'`, `"hehehe"`], 'hehehe')
-  same([`'he\thehe'`, `"he\thehe"`], 'he\thehe')
-  same([`'he\\\\hehe'`, `"he\\\\hehe"`], 'he\\hehe')
-  same([`'2018-01-01T00:00:00'`, `"2018-01-01T00:00:00"`], '2018-01-01T00:00:00')
+  sameD(['hehehe', `'hehehe'`, `"hehehe"`], {$and: ['hehehe']})
+  sameD([`'he\thehe'`, `"he\thehe"`], {$and: ['he\thehe']})
+  sameD([`'he\\\\hehe'`, `"he\\\\hehe"`], {$and: ['he\\hehe']})
+  sameD([`'2018-01-01T00:00:00'`, `"2018-01-01T00:00:00"`], {$and: ['2018-01-01T00:00:00']})
   // Block
   sameD([
     `good:good`,
@@ -296,7 +300,7 @@ test('test complex parser', t => {
   //let cursors = range(0, 581)
   //parse.debug(todo, cursors)
   sameD([
-    `title|startsWith: 'foo bar' || tags|elemMatch:{tagname|startsWith: astro, time|lt: } || tags.tag_name: 'good' && ~(tags.time|lt: '2018') || tags.tag_name|in:[foo, bar, 'a\\'b'] || halftype`,
+    `title|startsWith: 'foo bar' || tags|elemMatch:{tagname|startsWith: astro, time|lt: } || tags.tag_name: 'good' && (tags.time|lt: '2018') || tags.tag_name|in:[foo, bar, 'a\\'b'] || halftype`,
   ], {$or: [
     {title: {$startsWith: 'foo bar'}},
     {tags: {$elemMatch: {
@@ -305,7 +309,7 @@ test('test complex parser', t => {
     }}},
     {$and: [
       {'tags.tag_name': 'good'},
-      {$not: {'tags.time': {$lt: '2018'}}},
+      {'tags.time': {$lt: '2018'}},
     ]},
     {'tags.tag_name':{$in:['foo', 'bar', 'a\'b']}},
     'halftype',
@@ -437,24 +441,170 @@ test('test date filter', t => {
     ['20010601T10:00', false], ['20010601T11:59', true], ['20010601T18:29', true], ['20010601T18:30', false],
     ['20010601T03:00', false], ['20010601T03:01', true], ['20010601T04:59', true],  ['20010601T05:00', false],
   ], '2019')
+  let now = DateTime.local()
+  let m1h  = now.minus({hour:1})
+  let m5h  = now.minus({hour:5})
+  let m10h = now.minus({hour:10})
+  let m1m  = now.minus({month:1})
+  let m5m  = now.minus({month:5})
+  let m10m = now.minus({month:10})
+  testFunction(`
+    >-6h <-2h ||
+    >-6M <-2M
+    `,[
+    [m1h.toISO(), false],
+    [m5h.toISO(), true],
+    [m10h.toISO(), false],
+    [m1m.toISO(), false],
+    [m5m.toISO(), true],
+    [m10m.toISO(), false],
+  ])
 
 
   t.pass()
+})
+test.only('test date filter-mongodb syntax', t => {
+  let parse = MongodbDateFilter
+  let date = "$$date"
+  let input = {$dateToString: {date}}
+  let timezone = DateTime.local().zone.name
+  let blanktracer = {}
+  blanktracer.trace = _ => {}
+  function sameD (todo, _filter, _value) {
+    let result
+    result = parse(todo, {tracer:blanktracer})
+    let {filter, value} = result
+    if (filter) {
+      t.deepEqual(_filter, filter, JSON.stringify({todo, _filter, filter}))
+    }
+    if (_value !== undefined) {
+      t.is(_value, value)
+    }
+  }
+  function D(str) {
+    return DateTime.fromISO(str).toUTC().toISO()
+  }
+  function T(str) {
+    return DateTime.fromISO(str).toUTC().toISOTime()
+  }
+  function E(str, unit) {
+    return DateTime.fromISO(str).endOf(unit).toUTC().toISO()
+  }
+  sameD(`2018`,[ ], '2018')
+  sameD(`2018-10`,[ ], '2018-10')
+  sameD(`2018-10-10`,[ ], '2018-10-10')
+  sameD(`2018-10-10T12:32:21.123+08:00`,[ ], '2018-10-10T12:32:21.123+08:00')
+  sameD(`T12`,[ ], 'T12')
+  sameD(`12:`,[ ], '12:')
+  sameD(`12:30`,[ ], '12:30')
+  sameD(`>2008-10-10T12:00:00`,{$gt: [input, D('2008-10-10T12:00:00')]})
+  sameD(`>=2008-10-10T12:00:00`,{$gte: [input, D('2008-10-10T12:00:00')]})
+  sameD(`<2008-10-10T12:00:00`,{$lt: [input, D('2008-10-10T12:00:00')]})
+  sameD(`<=2008-10-10T12:00:00`,{$lte: [input, D('2008-10-10T12:00:00')]})
+  sameD(`>=2008-10-10T12 <2008-10-11 || >=2008-05-10T12 <2008-05-11 || ~(<2009 || >2010) 2019`,
+    {$or:[
+      {$and:[{$gte:[input, D('2008-10-10T12')]}, {$lt:[input, D('2008-10-11')]}]},
+      {$and:[{$gte:[input, D('2008-05-10T12')]}, {$lt:[input, D('2008-05-11')]}]},
+      {$not:[{$or:[
+          {$lt:[input, D('2009')]}, {$gt:[input, D('2010')]}
+      ]}]}
+    ]},
+    '2019')
+  sameD(`
+    in:year:2000 ||
+    (in:2001 in:month:03) ||
+    (in:2002 in:day:29) ||
+    (in:2004 in:02-29) ||
+    (in:2019 in:weekday:3) ||
+    (in:2019-01 >=weekday:3 <weekday:5) ||
+    in:2008-08-08 ||
+    in:2010-10 ||
+    in:201012 ||
+    (>06-06 <06-11)
+    2019
+    `,{$or:[
+        {$and: [{$gte:[input, D('2000')]}, {$lte:[input, E('2000', 'year')]}]},
+        {$and: [
+          {$and: [{$gte:[input, D('2001')]}, {$lte:[input, E('2001', 'year')]}]},
+          {$eq:[{$month:{date, timezone}}, 3 ]}
+        ]},
+        {$and: [
+          {$and: [{$gte:[input, D('2002')]}, {$lte:[input, E('2002', 'year')]}]},
+          {$eq:[{$day:{date, timezone}}, 29 ]}
+        ]},
+        {$and: [
+          {$and: [{$gte:[input, D('2004')]}, {$lte:[input, E('2004', 'year')]}]},
+          {$and: [
+            {$eq:[{$month:{date, timezone}}, 2 ]},
+            {$eq:[{$day:{date, timezone}}, 29 ]},
+          ]}
+        ]},
+        {$and: [
+          {$and: [{$gte:[input, D('2019')]}, {$lte:[input, E('2019', 'year')]}]},
+          {$eq:[{$dayOfWeek:{date, timezone}}, 3 ]}
+        ]},
+        {$and: [
+          {$and: [{$gte:[input, D('2019-01')]}, {$lte:[input, E('2019-01', 'month')]}]},
+          {$gte:[{$dayOfWeek:{date, timezone}}, 3 ]},
+          {$lt:[{$dayOfWeek:{date, timezone}}, 5 ]},
+        ]},
+        {$and: [
+          {$gte:[input, D('2008-08-08')]},
+          {$lte:[input, E('2008-08-08', 'day')]},
+        ]},
+        {$and: [
+          {$gte:[input, D('2010-10')]},
+          {$lte:[input, E('2010-10', 'month')]},
+        ]},
+        {$and: [
+          {$gte:[input, D('2010-12')]},
+          {$lte:[input, E('2010-12', 'month')]},
+        ]},
+        {$and: [
+          {$and: [
+            {$gte: [{$month:{date, timezone}}, 6]},
+            {$gt: [{$day:{date, timezone}}, 6]},
+          ]},
+          {$and: [
+            {$lte: [{$month:{date, timezone}}, 6]},
+            {$lt: [{$day:{date, timezone}}, 11]},
+          ]}
+        ]}
+    ]}, '2019')
+  let tinput = {$dateToString: {date, format:"%H:%M:%S.%LZ"}}
+  sameD(`
+    (in:2018 >=10 <18) ||
+    (in:2019 (>10:00 <18:30) || (>03:00 <05:00))
+    2019
+    `,{$or:[
+        {$and: [
+          {$and: [{$gte:[input, D('2018')]}, {$lte:[input, E('2018', 'year')]}]},
+          {$gte: [tinput, T('10')]},
+          {$lt: [tinput, T('18')]},
+        ]},
+        {$or:[
+          {$and:[
+            {$and: [{$gte:[input, D('2019')]}, {$lte:[input, E('2019', 'year')]}]},
+            {$and:[
+              {$gt: [tinput, T('10:00')]},
+              {$lt: [tinput, T('18:30')]},
+            ]},
+          ]},
+          {$and: [
+            {$gt: [tinput, T('03:00')]},
+            {$lt: [tinput, T('05:00')]},
+          ]},
+        ]}
+    ]}, '2019')
+  let result = parse(`
+    (in:2018 >=10 <18) ||
+    (in:2019 (>10:00 <18:30) || (>03:00 <05:00)) ||
+    (>-3m <+3m >00:00 <01:00)
+    2019
+    `, {tracer:blanktracer})
+  //console.log(JSON.stringify(result, null, 2))
+  t.pass()
   return
-  testFunction(``,[
-
-  ], '')
-
-
-  sameD(`>2018`, {$gt: 233})
-  sameD(`>2018-10 <=2018-10-16`, {$and: [{$gt: 2333}, {$lte: 1e3}]})
-  sameD(`>2018-10-16T03 <=2018-10-16T03:23 || >=2018-10-16T03:23:21 && <2018-10-16T03:23:21Z`,
-       {$or: [{$and:[{$gt:2333}, {$lte:1e3}]}, {$and:[{$gte:1.3e4},{$lt:123.3123}]}]}
-  )
-  sameD(`>2018-10-16T03:23:21+8 <=2018-10-16T03:23:21+08 || ~>=2018-10-16T03:23:21+08:00 && <2018-10-16T03:23:21.12312`,
-       {$or: [{$and:[{$gt:'2018-10-16T03:23:21+8'}, {$lte:'2018-10-16T03:23:21+08'}]}, {$and:[{$not:{$gte:'2018-10-16T03:23:21+08:00'}},{$lt:'2018-10-16T03:23:21.12312'}]}]}
-  )
-  sameD(`"this.getHours() > 15 && this.getHours() < 20"`, {$where: 'this.getHours() > 15 && this.getHours() < 20'})
 })
 
 export default {todo, todoObj}

@@ -7,8 +7,13 @@
       </test-block>
     </test-env>
     <test-env>
-      <test-block title="Test syntax analysis" name="syntax" id="syntax-id" :fold="true" :struct="demoStruct">
-        <parse-test-pre :content="testData.simple.content" :contentObj="testData.simple.contentObj"/>
+      <test-block title="Test simple search0" name="search0" id="syntax-id" :fold="true" :struct="demoStruct">
+        <parse-test-pre :content="testData.search0.content" :contentObj="testData.search0.contentObj"/>
+      </test-block>
+    </test-env>
+    <test-env>
+      <test-block title="Test simple search1" name="search1" id="syntax-id" :fold="true" :struct="demoStruct">
+        <parse-test-pre :content="testData.search1.content" :contentObj="testData.search1.contentObj"/>
       </test-block>
     </test-env>
   </div>
@@ -54,7 +59,7 @@ let testData = {
       test.more.than.extra|one|space| :    ||
       'string.more.than.extra'|one|space| :    ||
       (foo:foo && bar:bar || foobar:foobar && barfoo:barfoo) ||
-      ( (unfinished0) unfinished1) ||
+      ( (unfinished0) (unfinished1 || unfinished11:)) ||
       'unfinished2' ||
       unfinished3: {
         part,
@@ -76,6 +81,7 @@ let testData = {
           456, {inner.inner|in: 567}
         ]}
       ]
+      last several keys are search keys
       `,
     contentObj: {$or: [
       {$title: {$startsWith: 'foo bar'}},
@@ -101,7 +107,7 @@ let testData = {
         {$and: [{foo:"foo"}, {bar:"bar"}]},
         {$and: [{foobar:"foobar"}, {barfoo: "barfoo"}]}
       ]},
-      {$and: ['unfinished0', 'unfinished1']},
+      {$and: ['unfinished0', {$or: ['unfinished1', {unfinished11: null}]}]},
       'unfinished2',
       {unfinished3: {
         part: null,
@@ -123,12 +129,36 @@ let testData = {
       {'partDot.': null},
       {partOP:{$:null}},
       {partOP1:{$op:{$op:{$:null}}}},
-      {'partOP2.nice.good.great':{$op:{$op: {$: [
-        123, {'inner.region':{$in: [
-          456, {'inner.inner': {$in: 567}}
-        ]}}
-      ]}}}},
+      {$and: [
+        {'partOP2.nice.good.great':{$op:{$op: {$: [
+          123, {'inner.region':{$in: [
+            456, {'inner.inner': {$in: 567}}
+          ]}}
+        ]}}}},
+        'last', 'several', 'keys', 'are', 'search', 'keys'
+      ]}
     ]}
+  },
+  search0: {
+    content:  `
+      SingleKey
+      `,
+    contentObj: {$and: ['SingleKey']},
+  },
+  search1: {
+    content:  `
+      multiple keys with some operations like +good -bad
+      `,
+    contentObj: {$and: [
+      "multiple",
+      "keys",
+      "with",
+      "some",
+      "operations",
+      "like",
+      "+good",
+      "-bad",
+    ]},
   }
 }
 

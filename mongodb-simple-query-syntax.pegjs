@@ -13,14 +13,19 @@
 start
   = StartOR
   / StartAND
-  / StartBlock
 
 StartOR "startor"
   = ws10 v:OR    ws01 { return v }
 StartAND "startand"
-  = ws10 v:AND   ws01 { return v }
-StartBlock "startblock"
-  = ws10 v:Block ws01 { return v }
+  = ws10 v:ANDBlock   ws01 {
+    if (typeof(v) === 'object') {
+      return v
+    } else {
+      return {
+        $and: [v]
+      }
+    }
+  }
 
 ws "whitespace"
   = chars:[ \t\n\r]* { return chars.join("") }
@@ -275,7 +280,13 @@ KeyOP "keyop"
 
 KeyKey "keykey"
   = head:SimpleStringKey
-    & { if (head.indexOf('.')>=0) return true }
+    & {
+      if (head.indexOf('.')>=0) {
+        if (Number(head) === NaN) {
+          return true
+        }
+      }
+    }
     {
       return [head]
     }
@@ -285,9 +296,8 @@ KeyValue "keyvalue"
   / SimpleStringKey
   / Number
 
-
 SimpleString "simpleString"
-  = prefix:[a-zA-Z_$<>=+\-] suffix:[0-9a-zA-Z_$<>+\-=]* { return prefix + suffix.join(""); }
+  = prefix:[a-zA-Z_$<>=+\-] suffix:[0-9a-zA-Z_$.<>+\-=]* { return prefix + suffix.join(""); }
 
 SimpleStringKey "simpleString"
   = prefix:[a-zA-Z_$<>=+\-] suffix:[0-9a-zA-Z_$.<>+\-=]* { return prefix + suffix.join(""); }
@@ -314,8 +324,8 @@ SimpleValue 'simplevalue'
   / true
   / false
   / null
-  / SimpleString
   / Number
+  / SimpleString
   / RegularExpression
 
 

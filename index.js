@@ -834,7 +834,6 @@ Parser.prototype.autocomplete = function (input) {
   let {type, subtype, valueType, stateStack, extract, cursor} = input
   if (!type || !this.struct) return {type: null} // not good cursor position for auto complete
   let path = []
-  console.log('stateStack:', stateStack)
   if (stateStack && subtype !== 'ValueBlock') {
     let parentStacks = type === 'key' ? stateStack.slice(0,-1) : stateStack
     for (let item of parentStacks) { // for value
