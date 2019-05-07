@@ -390,6 +390,9 @@ Tracer.prototype.getAutocompleteType = function (cursor, log, detail, print) {
       output = { type: 'value', subtype: 'pairValueNull', complete: 'insert', extract:"", start: cursor, end: cursor, stateStack}
       break
     } else if (type === 'ValueArray') { // unfinished object
+      if (!value) { // ctime:! ....
+        break
+      }
       output = {
         type: 'value',
         subtype: 'arrayValue',
@@ -759,12 +762,22 @@ Parser.prototype.analysis = function (cursor) {
 
 function getTypeStruct(key, type) {
   let ops
-  if (type === 'string') {
+  if (type === 'string') { // can have string or regexp
     ops = OP_string
+  } else if (type === 'String') { // can only be String
+    return null
   } else if (type === 'number') {
     ops = OP_number
   } else if (type === 'date') {
     ops = OP_date
+  } else if (type === 'expr') {
+    ops = OP_expr
+  } else if (type === 'Expr') {
+    ops = OP_expr
+  } else if (type === 'addFields') {
+    return {description: 'addFields', type:'fieldObject'}
+  } else if (type === 'fieldObject') {
+    return {description: 'fieldObject', type:'fields'}
   }
   if (key in ops.fields) {
     return ops.fields[key]
@@ -778,8 +791,15 @@ function getSubStruct (key, current_struct, path) {
   if (current_struct.fields && key in current_struct.fields) {
     return current_struct.fields[key]
   } else { // get current_struct based on type and array
-    let ops
+    if (current_struct.root) { // special ops for root
+      if (key in OP_ROOT.fields) {
+        return OP_ROOT.fields[key]
+      }
+    }
     if (array) {
+      if (key === '$len') {
+        return OP_number
+      }
       if (type === 'object') {
         if (key.startsWith('$')) { // e.g., tags|in: [...], tags: {$gt: ...}
           if (levelKeys.includes(key)) {
@@ -790,7 +810,11 @@ function getSubStruct (key, current_struct, path) {
             return null
           }
         } else {
-          return current_struct.fields[key]
+          if (current_struct.fields) {
+            return current_struct.fields[key]
+          } else {
+            return null
+          }
         }
       } else { // array of values
         return getTypeStruct(key, type)
@@ -810,6 +834,7 @@ function getSubStruct (key, current_struct, path) {
 }
 function getStruct(struct, path) {
   let current_struct = struct
+  let current_root = struct
   let {root} = struct
   for (let each of path) {
     if (typeof(each) === 'number') { continue }
@@ -817,17 +842,20 @@ function getStruct(struct, path) {
       if (root) root = false
       for (let key of each.split('.')) {
         current_struct = getSubStruct(key, current_struct, path)
-        if (!current_struct) { return null } // can not parse struct
+        if (!current_struct) { return {struct:null} } // can not parse struct
+        // metadatas.value is special
+        if (current_struct.type === 'object' && current_struct.path !== 'metadatas.value') current_root = current_struct
       }
     } else {
       if (!root || (root &&!(each === "$and" || each === "$or"))) {
         if (root) root = false
         current_struct = getSubStruct(each, current_struct, path)
-        if (!current_struct) { return null } // can not parse struct
-      }
+        if (!current_struct) { return {struct:null} } // can not parse struct
+        if (current_struct.type === 'object' && current_struct.path !== 'metadatas.value') current_root = current_struct
+      } // else level not change
     }
   }
-  return current_struct
+  return {struct:current_struct, root:current_root}
 }
 // TODO: change ctime, mtime, mctime, mmtime for api
 Parser.prototype.compile = function (input, parent, key, path, level, state) {
@@ -835,11 +863,12 @@ Parser.prototype.compile = function (input, parent, key, path, level, state) {
   let error = []
   if (!state) state = {
     lastAnd: null,  // process text search
-    hasText: false, // debug text search
     arrayLength: [], // process |lenth for top-level arrays
     el: [], // process |lenth for top-level arrays
     date: [], // support date in the first level
     unwindCount: 0,
+    addFieldsCount: 0,
+    textCount: false, // debug text search
   }
   if (!level) level = 0
   const levelKeys = ['$and','$or','$not']
@@ -859,7 +888,7 @@ Parser.prototype.compile = function (input, parent, key, path, level, state) {
     return {result: null, error: [`${path.join('=>')} is null!`]}
   } else if (typeof(input) === 'string') {
     if (this.struct) {
-      let struct = getStruct(this.struct, path)
+      let {struct} = getStruct(this.struct, path)
       if (!struct) {
         return {result: input}
       } else {
@@ -923,13 +952,14 @@ Parser.prototype.compile = function (input, parent, key, path, level, state) {
       if (key === '$and' && level === 0) state.lastAnd = {result, key: oldkey, parent}
       if (key === '$len' && level === 1) state.arrayLength.push({result, parent, key:oldkey})
       if (key === '$el') { state.el.push({result}) }
-      if (key === '$text') state.hasText = true
       let sub = this.compile(input[key], result, key, newpath, newlevel, state)
       if (sub.error) {
         error = [...error, ...sub.error]
       }
       result[key] = sub.result
       if (key === '$unwind') state.unwindCount += 1
+      if (key === '$unwind') state.addFieldsCount += 1
+      if (key === '$text') state.textCount += 1
     }
     // leave return in the last part
   } else {
@@ -940,65 +970,73 @@ Parser.prototype.compile = function (input, parent, key, path, level, state) {
     aggregate = []
     if (state.lastAnd) { // extract $text search
       let sort, addFields
-      if (state.hasText) {
-        error = [...error, `both have $text and search keys`]
-      } else { // process search keys and $unwind
-        let {result:lastAnd, parent, key} = state.lastAnd
-        let flags = lastAnd.$and.map(_ => (typeof(_)==='string' || (typeof(_) === 'object' && '$unwind' in _))).reverse()
-        let index = flags.findIndex(_ => _===false)
-        let iterms
-        if (index !== 0) { // have search keys or $unwind
-          if (index === -1) { // only when we just have search keys
-            iterms = lastAnd.$and
-            if (parent===undefined) {
-              delete result.$and
-            } else {
-              if (key === parent.length-1) {
-                parent.splice(key,1)
-              } else {
-                throw Error('need debug here')
-              }
-            }
+      let {result:lastAnd, parent, key} = state.lastAnd
+      let flags = lastAnd.$and.map(
+        _ => (typeof(_)==='string' || // string: search key
+             (typeof(_) === 'object' && '$unwind' in _) || // $unwind
+             (typeof(_) === 'object' && '$addFields' in _) // $unwind
+      )).reverse()
+      let index = flags.findIndex(_ => _===false)
+      let iterms
+      if (index !== 0) { // have search keys or $unwind or $addFields
+        if (index === -1) { // only when we just have search keys
+          iterms = lastAnd.$and
+          if (parent===undefined) {
+            delete result.$and
           } else {
-            iterms = lastAnd.$and.slice(-index)
-            lastAnd.$and = lastAnd.$and.slice(0, -index)
-          }
-          let unwind
-          let searchKeys = []
-          iterms.forEach(_ => {
-            if (typeof(_) === 'string') {
-              if (_.search(' ')!==-1) { // must be a quoted string, add quote for it
-                searchKeys.push(JSON.stringify(_))
-              } else {
-                searchKeys.push(_)
-              }
-            } else if (_.$unwind) {
-              unwind = _
+            if (key === parent.length-1) {
+              parent.splice(key,1)
+            } else {
+              throw Error('need debug here')
             }
-          })
+          }
+        } else {
+          iterms = lastAnd.$and.slice(-index)
+          lastAnd.$and = lastAnd.$and.slice(0, -index)
+        }
+        let unwind, addFields
+        let searchKeys = []
+        iterms.forEach(_ => {
+          if (typeof(_) === 'string') {
+            if (_.search(' ')!==-1) { // must be a quoted string, add quote for it
+              searchKeys.push(JSON.stringify(_))
+            } else {
+              searchKeys.push(_)
+            }
+          } else if ('$unwind' in _) {
+            unwind = _
+          } else if ('$addFields' in _) {
+            addFields = _
+          }
+        })
+        if (searchKeys.length) {
+          if (state.textCount>0) {
+            error.push(`both have $text and search keys`)
+          }
           let search = {$search: searchKeys.join(' ')}
           if (result.$and) {
-            result.$and.$text = search
+            result.$and.push({$text:search})
           } else if (input.$or) {
             result = {$and:[result, {$text: search}]}
           } else {
             result = {$text: search}
           }
-          addFields = {
-            searchScore: { $meta: "textScore" }
-          }
-          sort = {
-            searchScore: { $meta: "textScore" }
-          }
-          if (unwind) {
-            aggregate.push(unwind)
-            aggregate.push({$match: result})
-            aggregate.push({$project: {id:1}})
-          } else {
-            aggregate.push({$match: result})
-            aggregate.push({$addFields: addFields})
-            aggregate.push({$sort: sort})
-          }
+        }
+        if (addFields) { aggregate.push(addFields) }
+        addFields = {
+          searchScore: { $meta: "textScore" }
+        }
+        sort = {
+          searchScore: { $meta: "textScore" }
+        }
+        if (unwind) {
+          aggregate.push(unwind)
+          aggregate.push({$match: result})
+          aggregate.push({$project: {id:1}})
+        } else {
+          aggregate.push({$match: result})
+          aggregate.push({$addFields: addFields})
+          aggregate.push({$sort: sort})
         }
       }
     } else {
@@ -1010,9 +1048,13 @@ Parser.prototype.compile = function (input, parent, key, path, level, state) {
         let name = `${key}_length`
         delete parent[key]
         parent[name] = inside
-        let exists_addFields = aggregate.find(_=>'$addFields' in _ && _.$addFields[name])
-        if (!exists_addFields) {
-          aggregate.splice(0,0,{$addFields:{[name]: {$size: key}}})
+        let exists_addFields_index = aggregate.findIndex(_=>'$addFields' in _)
+        let match_index = aggregate.findIndex(_=>'$match' in _)
+        if (exists_addFields_index<0 || match_index < exists_addFields_index) { // add to top
+          aggregate.splice(0,0,{$addFields:{[name]: {$size: `\$${key}`}}})
+        } else {
+          let exists_addFields = aggregate[exists_addFields_index]
+          exists_addFields.$addFields[name] = {$size:`\$${key}`}
         }
       }
     }
@@ -1037,73 +1079,82 @@ Parser.prototype.compile = function (input, parent, key, path, level, state) {
 }
 
 // general operations
+let OP_expr = { // expr means Expr or fields or value
+  description:'expr', type:'Expr',
+  fields: {
+    $and: { description:"and", type:'Expr', array:true},
+    $or: { description:"or", type:'Expr', array:true},
+    $not: { description:"not", type:'Expr'},
+    $eq: { description:"==", type:'expr', array:true},
+    $lt: { description:"<", type:'expr', array:true},
+    $gt: { description:">", type:'expr', array:true},
+    $lte: { description:"<=", type:'expr', array:true},
+    $gte: { description:">=", type:'expr', array:true},
+    $ne: { description:"!=", type:'expr', array:true},
+    $cond: { description:"cond", type:'expr'},
+    if: { description:"if", type:'Expr'},
+    then: { description:"then", type:'Expr'},
+    else: { description:"else", type:'Expr'},
+    $abs: { description:"abs", type:'fields'},
+    $hour: { description:"hour", type:'fields'},
+    $minute: { description:"minute", type:'fields'},
+    $day: { description:"day", type:'fields'},
+    $month: { description:"month", type:'fields'},
+    $year: { description:"year", type:'fields'},
+  }
+}
 let OP_ROOT = {
   description: 'operation for root level',
   fields: {
-    $expr: {
-      description:'expr', type:'expr',
-      fields: {
-        $and: { description:"and", type:'expr', array:true},
-        $or: { description:"or", type:'expr', array:true},
-        $not: { description:"not", type:'expr'},
-        $eq: { description:"==", type:'expr', array:true},
-        $lt: { description:"<", type:'expr', array:true},
-        $gt: { description:">", type:'expr', array:true},
-        $lte: { description:"<=", type:'expr', array:true},
-        $gte: { description:">=", type:'expr', array:true},
-        $ne: { description:"!=", type:'expr', array:true},
-        $cond: { description:"cond", type:'expr'},
-        if: { description:"if", type:'expr'},
-        then: { description:"then", type:'expr'},
-        else: { description:"else", type:'expr'},
-        $abs: { description:"abs", type:'fields'},
-        $hour: { description:"hour", type:'fields'},
-        $minute: { description:"minute", type:'fields'},
-        $day: { description:"day", type:'fields'},
-        $month: { description:"month", type:'fields'},
-        $year: { description:"year", type:'fields'},
-      }
-    },
+    $expr: OP_expr,
     $where: {
-      description: 'where', type:'string',
+      description: 'where', type:'String',
     },
     $text: {
       description: 'text', type: 'object',
       fields: {
         $search: {
-          description: 'search', type: 'string',
+          description: 'search', type: 'String',
         }
       }
+    },
+    $unwind: {
+      description: 'unwind', type: 'fields',
+    },
+    $addFields: {
+      description: 'addFields', type: 'addFields'
     }
   }
-
 }
 let OP_string = {
   description: 'operations for string',
+  type: 'string',
   fields: {
-    $lt: { description:"<", type:'string' },
-    $gt: { description:">", type:'string' },
-    $lte: { description:"<=", type:'string' },
-    $gte: { description:">=", type:'string' },
-    $ne: { description:"!=", type:'string' },
-    $in: { description:'in', type: ['string', 'regexp'], array: true },
-    $nin: { description:'nin', type: ['string', 'regexp'], array: true },
+    $lt: { description:"<", type:'String' },
+    $gt: { description:">", type:'String' },
+    $lte: { description:"<=", type:'String' },
+    $gte: { description:">=", type:'String' },
+    $ne: { description:"!=", type:'String' },
+    $in: { description:'in', type: 'String', array: true },
+    $nin: { description:'nin', type: 'string', array: true },
   }
 }
 let OP_number = {
   description: 'operations for number',
+  type: 'number',
   fields: {
     $lt: { description:"<", type:'number' },
     $gt: { description:">", type:'number' },
     $lte: { description:"<=", type:'number' },
     $gte: { description:">=", type:'number' },
     $ne: { description:"!=", type:'number' },
-    $in: { description:'in', type: 'array', array: true },
-    $nin: { description:'nin', type: 'array', array: true },
+    $in: { description:'in', type: 'number', array: true },
+    $nin: { description:'nin', type: 'number', array: true },
   }
 }
 let OP_date = {
   description: 'operations for date',
+  type: 'date',
   fields: {
     $lt: { description:"<", type:'date' },
     $gt: { description:">", type:'date' },
@@ -1121,6 +1172,7 @@ let OP_array = {
     $ne: { description:">=", type:'unknown' },
     $in: { description:'in', type: 'unknown', array: true },
     $nin: { description:'nin', type: 'unknown', array: true },
+    $el: { description:'elemMatch', type: 'object' },
     $elemMatch: { description:'elemMatch', type: 'object' },
   }
 }
@@ -1217,7 +1269,22 @@ Parser.prototype.autocomplete = function (input) {
       }
     }
   }
-  console.log(input, path)
+  let struct, root
+  if (this.struct) {
+    let __ = getStruct(this.struct, path)
+    struct = __.struct
+    root = __.root
+  }
+  console.log()
+  console.log({root, struct})
+  console.log(
+    input,
+    path,
+    struct ? {
+      type: struct.type,
+      array: struct.array,
+      root_fields:root.fields ? Object.keys(root.fields).join(','): null} : null,
+  )
   //if (!this.struct) return {type:null}
 
   if (type === 'key') {
