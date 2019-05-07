@@ -2,6 +2,8 @@ const path = require('path')
 let {SyntaxError, parse} = require('./mongodb-simple-query-syntax.js')
 let {parse: NumberParser} = require('./filter-number.js')
 let {parse: DateParser} = require('./filter-date.js')
+let {parse: MongodbDateParser} = require('./filter-date-mongodb.js')
+const {DateTime} = require('luxon')
 
 /*
 TODO:
@@ -95,8 +97,6 @@ class ParseError extends Error {
     this.after = after
   }
 }
-
-
 function replacer(key, value) {
   if (value instanceof RegExp) {
     return ("__REGEXP " + value.toString())
@@ -757,8 +757,23 @@ Parser.prototype.analysis = function (cursor) {
 */
 
 
-// TODO: write article demo query
-function getSubStruct (key, current_struct) {
+function getTypeStruct(key, type) {
+  let ops
+  if (type === 'string') {
+    ops = OP_string
+  } else if (type === 'number') {
+    ops = OP_number
+  } else if (type === 'date') {
+    ops = OP_date
+  }
+  if (key in ops.fields) {
+    return ops.fields[key]
+  } else {
+    return null
+  }
+}
+function getSubStruct (key, current_struct, path) {
+  const levelKeys = ['$el', '$elemMatch', '$and', '$or', '$not']
   let {type, array} = current_struct
   if (current_struct.fields && key in current_struct.fields) {
     return current_struct.fields[key]
@@ -766,29 +781,30 @@ function getSubStruct (key, current_struct) {
     let ops
     if (array) {
       if (type === 'object') {
-        // also support ops of primary keys
-        if (current_struct.primary_key) {
-          let ss = getStruct(
-            current_struct.primary_key,
-            current_struct.fields[current_struct.primary_key],
-          )
-          if (key in ss.fields) {
-            return ss.fields[key]
+        if (key.startsWith('$')) { // e.g., tags|in: [...], tags: {$gt: ...}
+          if (levelKeys.includes(key)) {
+            return current_struct
+          } else if (current_struct.primary_key) {
+            return current_struct.fields[current_struct.primary_key]
+          } else {
+            return null
           }
+        } else {
+          return current_struct.fields[key]
         }
-
-      } else {
-
+      } else { // array of values
+        return getTypeStruct(key, type)
       }
     } else {
       if (type === 'object') {
-
+        if (levelKeys.includes(key)) {
+          return current_struct
+        } else {
+          return null
+        }
       } else {
-
+        return getTypeStruct(key, type)
       }
-    }
-    if (key in ops) {
-      return ops[key]
     }
   }
 }
@@ -796,29 +812,23 @@ function getStruct(struct, path) {
   let current_struct = struct
   let {root} = struct
   for (let each of path) {
-    if (typeof(each === Number)) {
-      if (!array) {
-        throw Error('need debug here')
-      }
-      continue
-    }
+    if (typeof(each) === 'number') { continue }
     if (each.indexOf('.')>-1) { // go into subsub field
       if (root) root = false
       for (let key of each.split('.')) {
-        current_struct = getSubStruct(key, current_struct, type, array)
+        current_struct = getSubStruct(key, current_struct, path)
         if (!current_struct) { return null } // can not parse struct
       }
     } else {
       if (!root || (root &&!(each === "$and" || each === "$or"))) {
         if (root) root = false
-        current_struct = getSubStruct(key, current_struct, type, array)
+        current_struct = getSubStruct(each, current_struct, path)
         if (!current_struct) { return null } // can not parse struct
       }
     }
   }
   return current_struct
 }
-// TODO: process length, process primary_key, process_struct
 // TODO: change ctime, mtime, mctime, mmtime for api
 Parser.prototype.compile = function (input, parent, key, path, level, state) {
   let result = {}
@@ -827,7 +837,8 @@ Parser.prototype.compile = function (input, parent, key, path, level, state) {
     lastAnd: null,  // process text search
     hasText: false, // debug text search
     arrayLength: [], // process |lenth for top-level arrays
-    primary_key: [], // process primary_key search for top-level arrays(tags, metadatas, relations, catalogues)
+    el: [], // process |lenth for top-level arrays
+    date: [], // support date in the first level
     unwindCount: 0,
   }
   if (!level) level = 0
@@ -847,7 +858,52 @@ Parser.prototype.compile = function (input, parent, key, path, level, state) {
   } else if (input === null) {
     return {result: null, error: [`${path.join('=>')} is null!`]}
   } else if (typeof(input) === 'string') {
-    return {result: input}
+    if (this.struct) {
+      let struct = getStruct(this.struct, path)
+      if (!struct) {
+        return {result: input}
+      } else {
+        let {type, array} = struct
+        if (type === 'date') {
+          //console.log(`level:${level}, date:${input}`)
+          if (level>1) {
+            let result = DateTime.fromISO(input)
+            if (result.isValid) {
+              return {result:result.toJSDate()}
+            } else {
+              return {result: null, error:[`not a valid date: ${input}`] }
+            }
+          } else { // level === 1
+            try {
+              let tracer = {}
+              tracer.trace = new Function()
+              let {filter, value} = MongodbDateParser(input, {tracer})
+              if (filter) {
+                result = JSON.parse(JSON.stringify(
+                  filter,
+                  function (__, value) { if(value==='$$date') {return `\$${key}`} else {return value} }
+                ))
+                state.date.push({result, parent, key})
+                return {result}
+              } else { // must have value
+                let result = DateTime.fromISO(value)
+                if (result.isValid) {
+                  return {result: result.toJSDate()}
+                } else {
+                  return {result: null, error:[`not a valid date: ${input}`] }
+                }
+              }
+            } catch (e) {
+              return {result: null, error:[`not a valid date filter: ${input}`] }
+            }
+          }
+        } else { // type !== date
+          return {result: input}
+        }
+      }
+    } else {
+      return {result: input}
+    }
   } else if (typeof(input) === 'number') {
     return {result: input}
   } else if (input instanceof Date) {
@@ -865,13 +921,14 @@ Parser.prototype.compile = function (input, parent, key, path, level, state) {
       let newpath = [...path, key]
       if (!levelKeys.includes(key)) newlevel = newlevel + 1
       if (key === '$and' && level === 0) state.lastAnd = {result, key: oldkey, parent}
+      if (key === '$len' && level === 1) state.arrayLength.push({result, parent, key:oldkey})
+      if (key === '$el') { state.el.push({result}) }
       if (key === '$text') state.hasText = true
-      let sub = this.compile(input[key], input, key, newpath, newlevel, state)
+      let sub = this.compile(input[key], result, key, newpath, newlevel, state)
       if (sub.error) {
         error = [...error, ...sub.error]
       }
       result[key] = sub.result
-      if (key === '$len' && level === 0) state.arrayLength.push({result, parent, key:oldkey})
       if (key === '$unwind') state.unwindCount += 1
     }
     // leave return in the last part
@@ -887,10 +944,10 @@ Parser.prototype.compile = function (input, parent, key, path, level, state) {
         error = [...error, `both have $text and search keys`]
       } else { // process search keys and $unwind
         let {result:lastAnd, parent, key} = state.lastAnd
-        let flags = lastAnd.$and.map(_ => typeof(_)==='string' || typeof(_) === 'object' && _.$unwind).reverse()
+        let flags = lastAnd.$and.map(_ => (typeof(_)==='string' || (typeof(_) === 'object' && '$unwind' in _))).reverse()
         let index = flags.findIndex(_ => _===false)
         let iterms
-        if (index !== 0) { // have search keys
+        if (index !== 0) { // have search keys or $unwind
           if (index === -1) { // only when we just have search keys
             iterms = lastAnd.$and
             if (parent===undefined) {
@@ -953,10 +1010,24 @@ Parser.prototype.compile = function (input, parent, key, path, level, state) {
         let name = `${key}_length`
         delete parent[key]
         parent[name] = inside
-        let exists_addFields = aggregate.find(_=>'addFields' in _ && _.$addFields[name])
+        let exists_addFields = aggregate.find(_=>'$addFields' in _ && _.$addFields[name])
         if (!exists_addFields) {
-          aggregate.push({$addFields:{[name]: {$size: key}}})
+          aggregate.splice(0,0,{$addFields:{[name]: {$size: key}}})
         }
+      }
+    }
+    if (state.el.length) {
+      for (let {result, parent, key} of state.el) {
+        let inside = result.$el
+        delete result.$el
+        result.$elemMatch = inside
+      }
+    }
+    if (state.date.length) {
+      for (let {result, parent, key} of state.date) {
+        //console.log(result, parent, key)
+        delete parent[key]
+        parent.$expr = result
       }
     }
     return {aggregate, error}
@@ -1050,7 +1121,7 @@ let OP_array = {
     $ne: { description:">=", type:'unknown' },
     $in: { description:'in', type: 'unknown', array: true },
     $nin: { description:'nin', type: 'unknown', array: true },
-    $elemMatch: { description:'elemMatch', type: 'subroot' },
+    $elemMatch: { description:'elemMatch', type: 'object' },
   }
 }
 let OP_array_number = JSON.parse(JSON.stringify(OP_array,

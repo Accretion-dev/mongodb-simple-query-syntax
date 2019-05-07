@@ -7,23 +7,23 @@
       </test-block>
     </test-env>
     <test-env>
-      <test-block title="Test simple search0" name="search0" id="syntax-id" :fold="false" :struct="dbstruct.Article">
-        <parse-test-pre :content="testData.search0.content" :contentObj="testData.search0.contentObj"/>
+      <test-block title="Test simple search0" name="search0" id="syntax-id" :fold="false">
+        <parse-test-pre :content="testData.search0.content" :contentObj="testData.search0.contentObj" :struct="dbstruct.Article"/>
       </test-block>
     </test-env>
     <test-env>
-      <test-block title="Test simple search1" name="search1" id="syntax-id" :fold="false" :struct="dbstruct.Article">
-        <parse-test-pre :content="testData.search1.content" :contentObj="testData.search1.contentObj"/>
+      <test-block title="Test simple search1" name="search1" id="syntax-id" :fold="false">
+        <parse-test-pre :content="testData.search1.content" :contentObj="testData.search1.contentObj" :struct="dbstruct.Article"/>
       </test-block>
     </test-env>
     <test-env>
-      <test-block title="Test Article" name="Article" id="syntax-id" :fold="false" :struct="dbstruct.Article">
-        <parse-test-pre :content="testData.Article.content" :contentObj="testData.Article.contentObj"/>
+      <test-block title="Test Article" name="Article" id="syntax-id" :fold="false">
+        <parse-test-pre :content="testData.Article.content" :contentObj="testData.Article.contentObj" :struct="dbstruct.Article"/>
       </test-block>
     </test-env>
     <test-env>
-      <test-block title="Test Tag" name="Tag" id="syntax-id" :fold="false" :struct="dbstruct.Tag">
-        <parse-test-pre :content="testData.Tag.content" :contentObj="testData.Tag.contentObj"/>
+      <test-block title="Test Tag" name="Tag" id="syntax-id" :fold="false">
+        <parse-test-pre :content="testData.Tag.content" :contentObj="testData.Tag.contentObj" :struct="dbstruct.Tag"/>
       </test-block>
     </test-env>
   </div>
@@ -213,9 +213,13 @@ let testData = {
       {$and:[
         tag_name: 'good', ctime: {$gt: '2019-03', $lt:'2019-10-10T12:00'}
       ]},
-      {$ctime:{$lte: '2018-12'}},
+      {ctime:{$lte: '2018-12'}},
       {tag_name|in: [bad, /fine/]}
     ]} ||
+
+    metadatas|el:{
+      name: 'rating', value|gte: 3
+    } ||
 
     python "parallel programming" -javascript
     `,
@@ -279,9 +283,12 @@ let testData = {
         {$and:[
           {tag_name: 'good'}, {ctime: {$gt: '2019-03', $lt:'2019-10-10T12:00'}}
         ]},
-        {$ctime:{$lte: '2018-12'}},
+        {ctime:{$lte: '2018-12'}},
         {tag_name:{$in: ['bad', /fine/]}},
       ]}}},
+      {metadatas:{$el:{
+        name: 'rating', value:{$gte:3}
+      }}},
       {$and: [
         'python',
         "parallel programming",
@@ -327,6 +334,7 @@ export default {
   data () {
     return {
       clsPrefix,
+      dbstruct,
       lodash,
       cursor: 0,
       testData,

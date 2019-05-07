@@ -294,13 +294,12 @@ KeyKey "keykey"
 KeyValue "keyvalue"
   = String
   / SimpleStringKey
-  / Number
 
 SimpleString "simpleString"
   = prefix:[a-zA-Z_$<>=+\-] suffix:[0-9a-zA-Z_$.<>+\-=]* { return prefix + suffix.join(""); }
 
 SimpleStringKey "simpleString"
-  = prefix:[a-zA-Z_$<>=+\-] suffix:[0-9a-zA-Z_$.<>+\-=]* { return prefix + suffix.join(""); }
+  = prefix:[0-9a-zA-Z_$<>=+\-] suffix:[0-9a-zA-Z_$.<>+\-=]* { return prefix + suffix.join(""); }
 
 // ----- Numbers ----- from https://github.com/pegjs/pegjs/blob/master/examples/json.pegjs
 
