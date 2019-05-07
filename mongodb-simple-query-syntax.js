@@ -340,7 +340,7 @@ function peg$parse(input, options) {
       peg$c81 = peg$otherExpectation("keykey"),
       peg$c82 = function(head) {
             if (head.indexOf('.')>=0) {
-              if (Number(head) === NaN) {
+              if (isNaN(Number(head))) {
                 return true
               }
             }

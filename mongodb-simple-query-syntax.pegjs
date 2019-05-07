@@ -282,7 +282,7 @@ KeyKey "keykey"
   = head:SimpleStringKey
     & {
       if (head.indexOf('.')>=0) {
-        if (Number(head) === NaN) {
+        if (isNaN(Number(head))) {
           return true
         }
       }
