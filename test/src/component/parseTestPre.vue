@@ -8,6 +8,7 @@
     />
     <button class="value" @click="cursor = Number(cursor) - 1" id='minus'> - </button>
     <button class="value" @click="cursor = Number(cursor) + 1" id='plus'> + </button>
+    <button class="value" @click="printCompile" id='print'> P </button>
     <template v-if="debug">
       <template v-if="typeof(debug.analysis.print)==='string'">
         <pre ref="pre"
@@ -146,7 +147,12 @@ export default {
           }
         }
       }
-    }
+    },
+    printCompile () {
+      let {result} = this.debug
+      let compiled = this.parser.compile(result)
+      console.log({result, compiled, struct: this.parser.struct})
+    },
   }
 }
 </script>
