@@ -309,7 +309,12 @@ ValuePair "value:pair"
 ValueBlock "value:block"
   = Value
 ValueArray "value:array"
-  = value:Value {return {value, location: location()} }
+  = value:ArrayValue {return {value, location: location()} }
+
+ArrayValue "arrayvalue"
+  = ComplexValue
+  / Pair
+  / SimpleValue
 
 Value "value"
   = ComplexValue

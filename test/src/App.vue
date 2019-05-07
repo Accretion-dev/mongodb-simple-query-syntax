@@ -211,7 +211,7 @@ let testData = {
     tags|elemMatch: {tag_name: 'good', ctime: {$gt: '2019-03', $lt:'2019-10-10T12:00'}} ||
     tags|elemMatch: {$or:[
       {$and:[
-        {tag_name: 'good'}, {ctime: {$gt: '2019-03', $lt:'2019-10-10T12:00'}}
+        tag_name: 'good', ctime: {$gt: '2019-03', $lt:'2019-10-10T12:00'}
       ]},
       {$ctime:{$lte: '2018-12'}},
       {tag_name|in: [bad, /fine/]}
