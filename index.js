@@ -828,6 +828,7 @@ Parser.prototype.compile = function (input, parent, key, path, level, state) {
     hasText: false, // debug text search
     arrayLength: [], // process |lenth for top-level arrays
     primary_key: [], // process primary_key search for top-level arrays(tags, metadatas, relations, catalogues)
+    unwindCount: 0,
   }
   if (!level) level = 0
   const levelKeys = ['$and','$or','$not']
@@ -871,25 +872,27 @@ Parser.prototype.compile = function (input, parent, key, path, level, state) {
       }
       result[key] = sub.result
       if (key === '$len' && level === 0) state.arrayLength.push({result, parent, key:oldkey})
+      if (key === '$unwind') state.unwindCount += 1
     }
     // leave return in the last part
   } else {
     debugger
   }
-  if (path.length === 0) {
+  if (path.length === 0) { // check state and prepare output
+    if (state.unwindCount>1) error = [...error, 'more than one $unwind']
     aggregate = []
     if (state.lastAnd) { // extract $text search
       let sort, addFields
       if (state.hasText) {
         error = [...error, `both have $text and search keys`]
-      } else {
+      } else { // process search keys and $unwind
         let {result:lastAnd, parent, key} = state.lastAnd
-        let flags = lastAnd.$and.map(_ => typeof(_)==='string').reverse()
+        let flags = lastAnd.$and.map(_ => typeof(_)==='string' || typeof(_) === 'object' && _.$unwind).reverse()
         let index = flags.findIndex(_ => _===false)
-        let searchKeys
+        let iterms
         if (index !== 0) { // have search keys
           if (index === -1) { // only when we just have search keys
-            searchKeys = lastAnd.$and
+            iterms = lastAnd.$and
             if (parent===undefined) {
               delete result.$and
             } else {
@@ -900,17 +903,23 @@ Parser.prototype.compile = function (input, parent, key, path, level, state) {
               }
             }
           } else {
-            searchKeys = lastAnd.$and.slice(-index)
+            iterms = lastAnd.$and.slice(-index)
             lastAnd.$and = lastAnd.$and.slice(0, -index)
           }
-          let processedStrings = searchKeys.map(_ => {
-            if (_.search(' ')!==-1) { // must be a quoted string, add quote for it
-              return JSON.stringify(_)
-            } else {
-              return _
+          let unwind
+          let searchKeys = []
+          iterms.forEach(_ => {
+            if (typeof(_) === 'string') {
+              if (_.search(' ')!==-1) { // must be a quoted string, add quote for it
+                searchKeys.push(JSON.stringify(_))
+              } else {
+                searchKeys.push(_)
+              }
+            } else if (_.$unwind) {
+              unwind = _
             }
           })
-          let search = {$search: processedStrings.join(' ')}
+          let search = {$search: searchKeys.join(' ')}
           if (result.$and) {
             result.$and.$text = search
           } else if (input.$or) {
@@ -924,9 +933,15 @@ Parser.prototype.compile = function (input, parent, key, path, level, state) {
           sort = {
             searchScore: { $meta: "textScore" }
           }
-          aggregate.push({$match: result})
-          aggregate.push({$addFields: addFields})
-          aggregate.push({$sort: sort})
+          if (unwind) {
+            aggregate.push(unwind)
+            aggregate.push({$match: result})
+            aggregate.push({$project: {id:1}})
+          } else {
+            aggregate.push({$match: result})
+            aggregate.push({$addFields: addFields})
+            aggregate.push({$sort: sort})
+          }
         }
       }
     } else {
