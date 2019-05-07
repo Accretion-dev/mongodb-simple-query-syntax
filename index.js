@@ -85,25 +85,17 @@ TODO:
 
 */
 
-
-/*
-  compile dict parsed from Tracer to a valid mongodb query
-  also define final project
-  things to do
-  * special syntax in the top level
-    * try to find several ValueBlock in the last ANDBlock
-      and compile them into a $text|search: array.join(' '),
-        if top is $and, put the $text search into the top level
-        if top is $or, add another $and
-      also sorted by score
-    * parse time query
-    * support $length operation
-  * remove all __keys__ in oubject
-  * convert value based on field types
-*/
-function compile (dict) {
-
+class ParseError extends Error {
+  constructor (start, end, expected, before, after) {
+    super(`Parse error:\nbefore:${before}\nafter:${after}\nexpected:${JSON.stringify(expected)}`)
+    this.start = start
+    this.end = end
+    this.expected = expected
+    this.before = before
+    this.after = after
+  }
 }
+
 
 function replacer(key, value) {
   if (value instanceof RegExp) {
@@ -713,7 +705,22 @@ Parser.prototype.parse = function ({content, cursor}) {
   let print = this.options.print
   let tracer = new Tracer({content, logSimple, logFull, print})
   this.tracer = tracer
-  let result = parse(content, {tracer})
+  let result
+  try {
+    result = parse(content, {tracer})
+  } catch (e) {
+    if (e instanceof SyntaxError) {
+      let start = e.location.start.offset
+      let end   = e.location.end.offset
+      let expected = e.expected
+      let before = content.slice(0, start)
+      let after = content.slice(start)
+      let error = new ParseError(start, end, expected, before, after)
+      throw error
+    } else {
+      throw e
+    }
+  }
   this.result = result
   if (cursor !== undefined) {
     analysis = tracer.getAutocompleteType(cursor, log, detail, print)
