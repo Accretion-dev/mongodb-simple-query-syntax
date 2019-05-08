@@ -31,6 +31,11 @@
         <parse-test-pre :content="testData.Catalogue.content" :contentObj="testData.Catalogue.contentObj" :struct="dbstruct.Catalogue"/>
       </test-block>
     </test-env>
+    <test-env>
+      <test-block title="Test incomplete" name="incomplete" id="incomplete-id" :fold="false">
+        <parse-test-pre :content="testData.incomplete.content" :struct="dbstruct.Article"/>
+      </test-block>
+    </test-env>
   </div>
 </template>
 
@@ -392,6 +397,153 @@ let testData = {
       }},
       {$unwind: "relations"}
     ]}
+  },
+  incomplete: {
+    content:`
+      ta ||
+      title:    ||
+      title:{}  ||
+      title:{$g}  ||
+      title:{$gt}  ||
+      title:{$gt:}  ||
+      title:{$gt:"123"}  ||
+      title:{$gt:"123",l}  ||
+      title:{$gt:"123",$lt}  ||
+      title:{$gt:"123",$lt:}  ||
+      title:{$gt:"123",$lt:"456"}  ||
+      ctime     ||
+      ctime|    ||
+      ctime|l   ||
+      comment   ||
+      comment|  ||
+      comment|l ||
+      comment:  ||
+      flags     ||
+      flags.    ||
+      flags.g   ||
+      flags:    ||
+      flags|    ||
+      flags|l   ||
+      tags             ||
+      tags:            ||
+      tags.fla         ||
+      tags.flags       ||
+      tags.flags|      ||
+      tags.flags|l     ||
+      tags.flags:      ||
+      tags.flags.      ||
+      tags.flags.good  ||
+      tags.flags.good: ||
+      tags.ctime       ||
+      tags.ctime|      ||
+      tags.ctime|l     ||
+      tags.ctime:      ||
+      tags.ctime.      ||
+      tag: {}          ||
+      tag: {un}        ||
+      tag: {unexists  }||
+      tag: {unexists:1}||
+      tags: /good/     ||
+      tags: {}         ||
+      tags: {i}        ||
+      tags: {$in}      ||
+      tags: {$in:}     ||
+      $and: [
+        $or:[
+          tag,
+          tags,
+          tags:,
+        ],
+        $or:[
+          tags|,
+          tags|i,
+          tags|in,
+          tags|in:,
+          tags|in:[],
+        ],
+        tags.,
+        tags.ta,
+        tags.tag_name,
+        tags.tag_name:,
+        tags.tag_name:"good",
+        tags.tag_name|,
+        tags.tag_name|i,
+        tags.tag_name|in,
+        tags.tag_name|in:,
+        tags.tag_name|in:[],
+        tags.tag_name|in:['good'],
+      ] ||
+      tags: {$in:[]}   ||
+      tags: {$in:['123','456']}   ||
+      tags|                     ||
+      tags|e                    ||
+      tags|el                   ||
+      tags|el:                  ||
+      tags|el:{}                ||
+      tags|el: {tag}            ||
+      tags|el: {tag_name}       ||
+      tags|el: {tag_name:}      ||
+      tags|el: {tag_name|}      ||
+      tags|el: {tag_name|i}     ||
+      tags|el: {tag_name|in}    ||
+      tags|el: {tag_name|in:}   ||
+      tags|el: {tag_name|in:[]} ||
+      tags|el: {tag_name|in:[233]} ||
+      tags|el: {tag_name|in:[233], ctim} ||
+      tags|el: {tag_name|in:[233], ctime} ||
+      tags|el: {tag_name|in:[233], ctime:} ||
+      tags|el: {tag_name|in:[233], ctime|} ||
+      tags|el: {tag_name|in:[233], ctime|g} ||
+      tags|el: {tag_name|in:[233], ctime|gt} ||
+      tags|el: {tag_name|in:[233], ctime|gt:} ||
+      tags|el: {tag_name|in:[233], ctime|gt:""} ||
+      tags|el: {tag_name|in:[233], ctime|gt:"2018"} ||
+      tags|el: {
+        $and: [
+          tag_nam,
+          tag_name,
+          tag_name:,
+          tag_name|,
+          tag_name|i,
+          tag_name|in,
+          tag_name|in:,
+          tag_name|in:[],
+          tag_name|in:[233],
+        ]
+      } ||
+      tags|el|or: [
+        $and: [
+          tag_nam,
+          tag_name,
+          tag_name:,
+          tag_name|,
+          tag_name|i,
+          tag_name|in,
+          tag_name|in:,
+          tag_name|in:[],
+          tag_name|in:[233],
+        ],
+        $and: [
+          ctim,
+          ctime,
+          ctime:,
+          ctime:'2009',
+          ctime|,
+          ctime|g,
+          ctime|gt,
+          ctime|gt:,
+          ctime|gt:"",
+          ctime|gt:"2018",
+        ]
+      ] ||
+      metadatas        ||
+      metadatas|       ||
+      metadatas|i      ||
+      metadatas|in     ||
+      metadatas|in:    ||
+
+      last:good
+    `
   }
 }
 

@@ -593,27 +593,51 @@ Tracer.prototype.getAutocompleteType = function (cursor, log, detail, print) {
       }
       break
     } else if (type === 'Object') {
-      output = {
-        type: 'edge',
-        subtype: type,
-        valueType: 'object',
-        complete: null,
-        start,
-        end,
-        value: each.result,
-        stateStack,
+      if (start<cursor && cursor<end) {
+        output = {
+          type: 'key',
+          subtype: 'objectKey',
+          complete: 'insert',
+          start,
+          end,
+          value: each.result,
+          stateStack,
+        }
+      } else {
+        output = {
+          type: 'edge',
+          subtype: type,
+          valueType: 'object',
+          complete: null,
+          start,
+          end,
+          value: each.result,
+          stateStack,
+        }
       }
       break
     } else if (type === 'Array') {
-      output = {
-        type: 'edge',
-        subtype: type,
-        valueType: 'array',
-        complete: null,
-        start,
-        end,
-        value: each.result,
-        stateStack,
+      if (start<cursor && cursor<end) {
+        output = {
+          type: 'value',
+          subtype: 'arrayValue',
+          complete: 'insert',
+          start,
+          end,
+          value: each.result,
+          stateStack,
+        }
+      } else {
+        output = {
+          type: 'edge',
+          subtype: type,
+          valueType: 'array',
+          complete: null,
+          start,
+          end,
+          value: each.result,
+          stateStack,
+        }
       }
       break
     }
@@ -1239,35 +1263,39 @@ Parser.prototype.autocomplete = function (input) {
     }
     if (type === 'key') { // for nested key operations
       let keys
-      if (Array.isArray(extract[0]) && extract.length === 1) {
+      if (extract === undefined) {
+        keys = null // extract is undefined, inside empty {} or []
+      } else if (Array.isArray(extract[0]) && extract.length === 1) {
         keys = [...extract]
         keys[0] = keys[0].slice(0,-1)
       } else {
         keys = extract.slice(0,-1)
-      }
-      if (keys.length === 1) {
-        if (Array.isArray(keys[0])) {
-          let subkeys = keys[0]
-          for (let subkey of subkeys) {
-            if (subkey) path.push(subkey)
+      } // else extract is undefined
+      if (keys) {
+        if (keys.length === 1) {
+          if (Array.isArray(keys[0])) {
+            let subkeys = keys[0]
+            for (let subkey of subkeys) {
+              if (subkey) path.push(subkey)
+            }
+          } else {
+            path.push(keys[0])
           }
-        } else {
-          path.push(keys[0])
-        }
-      } else if (keys.length > 1){
-        if (Array.isArray(keys[0])) {
-          let subkeys = keys[0]
-          for (let subkey of subkeys) {
-            if (subkey) path.push(subkey)
+        } else if (keys.length > 1){
+          if (Array.isArray(keys[0])) {
+            let subkeys = keys[0]
+            for (let subkey of subkeys) {
+              if (subkey) path.push(subkey)
+            }
+          } else {
+            path.push(keys[0])
           }
-        } else {
-          path.push(keys[0])
+          let tails = keys.slice(1)
+          for (let _ of tails) {
+            path.push(`\$${_}`)
+          }
         }
-        let tails = keys.slice(1)
-        for (let _ of tails) {
-          path.push(`\$${_}`)
-        }
-      }
+      } // else extract is undefined, inside empty {} or []
     }
   }
   if (!this.struct) return {type:null, path}
@@ -1277,11 +1305,11 @@ Parser.prototype.autocomplete = function (input) {
     struct = __.struct
     root = __.root
   }
-  console.log({root, struct})
+  console.log({root:root?JSON.parse(JSON.stringify(root)):null, struct:struct?JSON.parse(JSON.stringify(struct)):null})
   console.log(
     start,lastEnd,cursor,end,
     input,
-    path,
+    'path:', path,
     struct ? {
       type: struct.type,
       array: struct.array,
@@ -1293,78 +1321,67 @@ Parser.prototype.autocomplete = function (input) {
     start, lastEnd, cursor, end, complete, path, output
   }
 
+  let structPath = path.filter(_ => typeof(_)!=='number')
+  let isSubTop = path.findIndex(_ => _==='$el' || _==='$elemMatch') > -1
+  let isTop = !isSubTop && (path.length === 0 || ['$and', '$or', '$el', '$elemMatch'].includes(structPath[structPath.length-1]))
+  console.log({structPath, isTop, isSubTop})
   if (type === 'key') {
-    if (subtype === 'fieldKey' || subtype === 'ValueBlock' || subtype === 'Key') {
-      if (this.fields.includes(extract)) {
-        let matchArray = []
-        if (struct) {
-          if (struct.fields&&struct.fields[extract]&&struct.fields[extract].type==='date') {
-            matchArray.push({
-              data: `${extract}:""`,
-              cursorOffset: -1,
-            })
-          } else {
-            matchArray.push( `${extract}:` )
-          }
-          matchArray.push( `${extract}|` )
-        } else {
-          matchArray.push({
-            data: `${extract}:`
-          })
-        }
-        output.push({
-          data: matchArray
-        })
-        output.push({
-          group: 'fields',
-          description: 'fields of a model',
-          data: this.fields.filter(_ => _!==extract)
-        })
-      } else { // not match fields
-        output.push({
-          group: 'fields',
-          description: 'fields of a model',
-          data: this.fields
-        })
+    if (subtype === 'fieldKey' ||
+        subtype === 'ValueBlock' ||
+        subtype === 'Key' ||
+        subtype === 'objectKey' ||
+        (subtype === 'arrayValue' && (isTop || isSubTop)) ||
+        subtype === 'KeyKey' ||
+        (subtype === 'KeyOP' && extract.length === 1)
+        ) {
+      let thiskey
+      if (subtype === 'KeyKey') {
+        thiskey = extract[0][extract[0].length-1]
+      } else {
+        // when subtype is key, thiskey is a array and will not match, as expected
+        thiskey = extract
       }
-    } else if (subtype === 'KeyKey') { // balbal.asdfasd.asdf extract is array
-      let thiskey = extract[0][extract[0].length-1]
-      if (struct&&root&&'fields' in root) {
+      if (struct&&root&&'fields' in root) { // known struct and root
         let fields = Object.keys(root.fields)
-        if (fields.includes(thiskey)) {
+        if (fields.includes(thiskey)) { // exactly match a field
           let matchArray = []
-          if (struct.fields&&struct.fields[thiskey]&&struct.fields[thiskey].type==='date') {
-            matchArray.push({
-              data: `${thiskey}:""`,
-              cursorOffset: -1,
-            })
+          if (struct) {
+            if (struct.fields&&struct.fields[thiskey]&&struct.fields[thiskey].type==='date') {
+              matchArray.push({
+                data: `${thiskey}:""`,
+                cursorOffset: -1,
+              })
+            } else {
+              matchArray.push( `${thiskey}:` )
+            }
+            matchArray.push( `${thiskey}|` )
           } else {
-            matchArray.push( `${thiskey}:` )
+            matchArray.push({
+              data: `${thiskey}:`
+            })
           }
-          matchArray.push( `${thiskey}|` )
           output.push({
             data: matchArray
           })
           output.push({
-            group: 'subfields',
-            description: 'subfields',
+            group: 'fields',
+            description: 'fields of a model',
             data: fields.filter(_ => _!==thiskey)
           })
-        } else { // not exact match
+        } else { // not exactly match a field
           output.push({
-            group: 'subfields',
-            description: 'subfields',
+            group: 'fields',
+            description: 'fields of a model',
             data: fields
           })
         }
-      } else {
+      } else { // unknown (struct and root)
         output.push({
-          group: 'unknown subfields',
+          group: `${path.join('.')}.?`,
           always: true,
         })
       }
     } else if (subtype === 'KeyOP') { // extract is array
-      console.log('path:', root.path)
       let len = extract.length
       let thiskey = extract[len-1]
       if (len===1) { // thiskey is field path

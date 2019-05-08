@@ -113,7 +113,7 @@ export default {
     onChangeInput () {
       this.parser = new Parser({struct: this.struct, options:{print: true, logFull: false}})
       let result = this.parser.parse({content: this.content})
-      if (!equal(result, this.contentObj)) {
+      if (this.contentObj && !equal(result, this.contentObj)) {
         console.log({expect: this.contentObj, actual: result})
         console.log(diff(result, this.contentObj))
         throw Error('parse error')

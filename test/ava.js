@@ -1,6 +1,6 @@
 import test from 'ava'
 import path from 'path'
-import {SyntaxError, parse, Tracer} from '../index.js'
+import {SyntaxError, parse, Tracer, Parser} from '../index.js'
 import _date from '../filter-date.js'
 let {parse: DateFilter} = _date
 import _number from '../filter-number.js'
@@ -84,30 +84,50 @@ let blankTracer = function () {}
 blankTracer.prototype.trace = function (event) {}
 
 let todo, todoObj
+
 todo = `
-  title|startsWith: 'foo bar' ||
-  tags|elemMatch:{tagname|startsWith: astro, time|lt: } ||
+  $title|startsWith: 'foo bar' ||
+  'tags'|elemMatch:{tagname|startsWith: astro, time|lt: } ||
   tags.tag_name: 'good' && (tags.time|lt: '2018') ||
   tags.tag_name|in:[
-    foo, bar, 'a\\'b',
+    foo, bar, 'a\\'b', {foo:bar},
   ] ||
   halftype: ||
+  regtest: /^[\\u4E00-\\u9FA5A-Za-z0-9]+ [a-zA-Z0-9][-a-zA-Z0-9]{0,62}(.[a-zA-Z0-9][-a-zA-Z0-9]{0,62})+ \\w+([-+.]\\w+)*@\\w+([-.]\\w+)*\\.\\w+([-.]\\w+)*$/ ||
   flags|:flag  ||
   simple|level1|level2|level3 : s123 ||
   simple|level1|level2| : s12$ ||
-  simple|level1|level2| : ||
-  ( (unfinished0) unfinished1) ||
+  simple|level1|level2| :||
+  not|level|test|not| : ||
+  test.more.than.extra|one|space| :    ||
+  'string.more.than.extra'|one|space| :    ||
+  (foo:foo && bar:bar || foobar:foobar && barfoo:barfoo) ||
+  ( (unfinished0) (unfinished1 || unfinished11:)) ||
   'unfinished2' ||
   unfinished3: {
-    unfinished4,
-    'undefined%5',
-    unfinished6: ,
-    unfinished7|op8|:,
-    level1|in: { level2|in|in: { level3|in|in|in: good}},
-  }
+    part,
+    partDot.,
+    partOP|,
+    partOP1|op|op|,
+    partOP2.nice.good.great|op|op|,
+    'u%5',
+    u6: ,
+    u7|op8|:,
+    level1|in: { level2.stack|in|in: { level3|in|in|in: good}},
+  } ||
+  part||partgood:good||
+  partDot. ||
+  partOP| ||
+  partOP1|op|op| ||
+  partOP2.nice.good.great|op|op|: [
+    123, {inner.region|in:[
+      456, {inner.inner|in: 567}
+    ]}
+  ]
+  last "several keys" are +search -keys
 `
 todoObj = {$or: [
-  {title: {$startsWith: 'foo bar'}},
+  {$title: {$startsWith: 'foo bar'}},
   {tags: {$elemMatch: {
     tagname: {$startsWith: 'astro'},
     time: {$lt: null}
@@ -116,25 +136,52 @@ todoObj = {$or: [
     {'tags.tag_name': 'good'},
     {'tags.time': {$lt: '2018'}},
   ]},
-  {'tags.tag_name':{$in:['foo', 'bar', 'a\'b']}},
+  {'tags.tag_name':{$in:['foo', 'bar', 'a\'b', {foo:'bar'}]}},
   {halftype: null},
+  {regtest: /^[\u4E00-\u9FA5A-Za-z0-9]+ [a-zA-Z0-9][-a-zA-Z0-9]{0,62}(.[a-zA-Z0-9][-a-zA-Z0-9]{0,62})+ \w+([-+.]\w+)*@\w+([-.]\w+)*\.\w+([-.]\w+)*$/},
   {flags:{$:'flag'}},
   {simple:{$level1:{$level2:{$level3: 's123'}}}},
   {simple:{$level1:{$level2:{$: 's12$'}}}},
   {simple:{$level1:{$level2:{$: null}}}},
-  {$and: ['unfinished0', 'unfinished1']},
+  {not: {$level:{$test:{$not: {$: null}}}}},
+  {'test.more.than.extra':{$one:{$space:{$: null}}}},
+  {'string.more.than.extra':{$one:{$space:{$: null}}}},
+  {$or: [
+    {$and: [{foo:"foo"}, {bar:"bar"}]},
+    {$and: [{foobar:"foobar"}, {barfoo: "barfoo"}]}
+  ]},
+  {$and: ['unfinished0', {$or: ['unfinished1', {unfinished11: null}]}]},
   'unfinished2',
   {unfinished3: {
-    unfinished4: null, 'undefined%5': null, unfinished6: null, unfinished7: {$op8: {$: null}},
+    part: null,
+    'partDot.': null,
+    partOP: {$: null},
+    partOP1: {$op: {$op: {$:null}}},
+    'partOP2.nice.good.great': {$op: {$op: {$:null}}},
+    'u%5': null, u6: null, u7: {$op8: {$: null}},
     level1: { $in:{
-        level2: {
-          $in:{ $in:{
-              level3: {$in:{$in:{$in: 'good' }}}
-          } }
+      'level2.stack': {
+        $in:{ $in:{
+          level3: {$in:{$in:{$in: 'good' }}}
+        } }
       } }
     },
   }},
+  'part',
+  {partgood: 'good'},
+  {'partDot.': null},
+  {partOP:{$:null}},
+  {partOP1:{$op:{$op:{$:null}}}},
+  {$and: [
+    {'partOP2.nice.good.great':{$op:{$op: {$: [
+      123, {'inner.region':{$in: [
+        456, {'inner.inner': {$in: 567}}
+      ]}}
+    ]}}}},
+    'last', 'several keys', 'are', '+search', '-keys'
+  ]}
 ]}
+
 
 test('test complex parser', t => {
   let result
@@ -169,17 +216,26 @@ test('test complex parser', t => {
       t.is(result, value)
     }
   }
-  function sameD (todo, value) {
+  function sameD (todo, value, tracer) {
     let result
-    for (let each of todo) {
-      result = parse(each, {tracer:blanktracer})
-      t.deepEqual(result, value, JSON.stringify({each, result, value}))
-      result = parse(" "+each, {tracer:blanktracer})
-      t.deepEqual(result, value, JSON.stringify({each, result, value}))
-      result = parse(each+" ", {tracer:blanktracer})
-      t.deepEqual(result, value, JSON.stringify({each, result, value}))
-      result = parse(" "+each+" ", {tracer:blanktracer})
-      t.deepEqual(result, value, JSON.stringify({each, result, value}))
+    if (!tracer) {
+      for (let each of todo) {
+        result = parse(each, {tracer:blanktracer})
+        t.deepEqual(result, value, JSON.stringify({each, result, value}))
+        result = parse(" "+each, {tracer:blanktracer})
+        t.deepEqual(result, value, JSON.stringify({each, result, value}))
+        result = parse(each+" ", {tracer:blanktracer})
+        t.deepEqual(result, value, JSON.stringify({each, result, value}))
+        result = parse(" "+each+" ", {tracer:blanktracer})
+        t.deepEqual(result, value, JSON.stringify({each, result, value}))
+      }
+    } else {
+      for (let each of todo) {
+        debugger
+        let p = new Parser({options:{logFull: true, print:true}})
+        let result = p.parse({content: each})
+        t.deepEqual(result, value)
+      }
     }
   }
   // numbers
@@ -316,7 +372,7 @@ test('test complex parser', t => {
   ]})
   sameD([
     todo
-  ], todoObj)
+  ], todoObj, false)
 	t.pass()
 })
 test('test number filter', t => {
@@ -463,7 +519,7 @@ test('test date filter', t => {
 
   t.pass()
 })
-test.only('test date filter-mongodb syntax', t => {
+test('test date filter-mongodb syntax', t => {
   let parse = MongodbDateFilter
   let date = "$$date"
   let input = {$dateToString: {date}}
