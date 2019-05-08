@@ -5,6 +5,124 @@ let {parse: DateParser} = require('./filter-date.js')
 let {parse: MongodbDateParser} = require('./filter-date-mongodb.js')
 const {DateTime} = require('luxon')
 
+// general operations
+const OP_expr = { // expr means Expr or fields or value
+  description:'expr', type:'Expr',
+  fields: {
+    $and: { description:"and", type:'Expr', array:true},
+    $or: { description:"or", type:'Expr', array:true},
+    $not: { description:"not", type:'Expr'},
+    $eq: { description:"==", type:'expr', array:true},
+    $lt: { description:"<", type:'expr', array:true},
+    $gt: { description:">", type:'expr', array:true},
+    $lte: { description:"<=", type:'expr', array:true},
+    $gte: { description:">=", type:'expr', array:true},
+    $ne: { description:"!=", type:'expr', array:true},
+    $cond: { description:"cond", type:'cond',
+      fields: {
+        if: { description:"if", type:'Expr'},
+        then: { description:"then", type:'Expr'},
+        else: { description:"else", type:'Expr'},
+      }
+    },
+    $abs: { description:"abs", type:'fields'},
+    $hour: { description:"hour", type:'fields'},
+    $minute: { description:"minute", type:'fields'},
+    $day: { description:"day", type:'fields'},
+    $month: { description:"month", type:'fields'},
+    $year: { description:"year", type:'fields'},
+  }
+}
+const OP_ROOT = {
+  description: 'operation for root level',
+  fields: {
+    $expr: OP_expr,
+    $where: {
+      description: 'where', type:'String',
+    },
+    $text: {
+      description: 'text', type: 'object',
+      fields: {
+        $search: {
+          description: 'search', type: 'String',
+        }
+      }
+    },
+    $unwind: {
+      description: 'unwind', type: 'fields',
+    },
+    $addFields: {
+      description: 'addFields', type: 'addFields'
+    }
+  }
+}
+const OP_string = {
+  description: 'operations for string',
+  type: 'string',
+  fields: {
+    $lt: { description:"<", type:'String' },
+    $gt: { description:">", type:'String' },
+    $lte: { description:"<=", type:'String' },
+    $gte: { description:">=", type:'String' },
+    $ne: { description:"!=", type:'String' },
+    $in: { description:'in', type: 'String', array: true },
+    $nin: { description:'nin', type: 'string', array: true },
+  }
+}
+const OP_number = {
+  description: 'operations for number',
+  type: 'number',
+  fields: {
+    $lt: { description:"<", type:'number' },
+    $gt: { description:">", type:'number' },
+    $lte: { description:"<=", type:'number' },
+    $gte: { description:">=", type:'number' },
+    $ne: { description:"!=", type:'number' },
+    $in: { description:'in', type: 'number', array: true },
+    $nin: { description:'nin', type: 'number', array: true },
+  }
+}
+const OP_date = {
+  description: 'operations for date',
+  type: 'date',
+  fields: {
+    $lt: { description:"<", type:'date' },
+    $gt: { description:">", type:'date' },
+    $lte: { description:"<=", type:'date' },
+    $gte: { description:">=", type:'date' },
+  }
+}
+const OP_array_object = {
+  description: 'operations for array_object',
+  fields: {
+    $el: { description:'elemMatch', type: 'object' },
+    $elemMatch: { description:'elemMatch', type: 'object' },
+  }
+}
+const OP_array = {
+  description: 'operations for date',
+  fields: {
+    $lt: { description:"<", type:'unknown' },
+    $gt: { description:">", type:'unknown' },
+    $lte: { description:"<=", type:'unknown' },
+    $gte: { description:">=", type:'unknown' },
+    $ne: { description:">=", type:'unknown' },
+    $in: { description:'in', type: 'unknown', array: true },
+    $nin: { description:'nin', type: 'unknown', array: true },
+    $el: { description:'elemMatch', type: 'object' },
+    $elemMatch: { description:'elemMatch', type: 'object' },
+  }
+}
+const OP_array_number = JSON.parse(JSON.stringify(OP_array,
+  function (key, value) { if(key==='type' && value==='unknown') {return 'number'} else {return value} })
+)
+const OP_array_date = JSON.parse(JSON.stringify(OP_array,
+  function (key, value) { if(key==='type' && value==='unknown') {return 'date'} else {return value} })
+)
+const OP_array_string = JSON.parse(JSON.stringify(OP_array,
+  function (key, value) { if(key==='type' && value==='unknown') {return 'string'} else {return value} })
+)
+
 /*
 TODO:
   * support reg
@@ -698,8 +816,23 @@ Tracer.prototype.trace = function (event) {
   }
 }
 
+const OPDict = {
+  logical: ['$and','$or'],
+  root: ['$expr','$where','$text','$unwind','$addFields'],
+  expr: Object.keys(OP_expr.fields),
+  string: Object.keys(OP_string.fields),
+  number: Object.keys(OP_number.fields),
+  date: Object.keys(OP_date.fields),
+  array_string: Object.keys(OP_array_string.fields),
+  array_number: Object.keys(OP_array_number.fields),
+  array_date:   Object.keys(OP_array_date.fields),
+  array_object:   Object.keys(OP_array_object.fields),
+}
 function Parser({struct, options} = {}) {
   this.struct = struct
+  if (this.struct) {
+    this.fields = Object.keys(this.struct.fields)
+  }
   this.options = options || {}
 }
 Parser.prototype.parse = function ({content, cursor}) {
@@ -743,22 +876,6 @@ Parser.prototype.analysis = function (cursor) {
   let autocomplete = this.autocomplete(analysis)
   return {result, analysis, autocomplete}
 }
-/*
-  compile dict parsed from Tracer to a valid mongodb query
-  also define final project
-  things to do
-  * special syntax in the top level
-    * try to find several ValueBlock in the last ANDBlock
-      and compile them into a $text|search: array.join(' '),
-        if top is $and, put the $text search into the top level
-        if top is $or, add another $and
-      also sorted by score
-    * parse time query
-    * support $length operation
-  * remove all __keys__ in oubject
-  * convert value based on field types
-*/
-
 
 function getTypeStruct(key, type) {
   let ops
@@ -858,6 +975,7 @@ function getStruct(struct, path) {
   return {struct:current_struct, root:current_root}
 }
 // TODO: change ctime, mtime, mctime, mmtime for api
+// compile dict parsed from Tracer to a valid mongodb query
 Parser.prototype.compile = function (input, parent, key, path, level, state) {
   let result = {}
   let error = []
@@ -1077,127 +1195,10 @@ Parser.prototype.compile = function (input, parent, key, path, level, state) {
     return {result  , error}
   }
 }
-
-// general operations
-let OP_expr = { // expr means Expr or fields or value
-  description:'expr', type:'Expr',
-  fields: {
-    $and: { description:"and", type:'Expr', array:true},
-    $or: { description:"or", type:'Expr', array:true},
-    $not: { description:"not", type:'Expr'},
-    $eq: { description:"==", type:'expr', array:true},
-    $lt: { description:"<", type:'expr', array:true},
-    $gt: { description:">", type:'expr', array:true},
-    $lte: { description:"<=", type:'expr', array:true},
-    $gte: { description:">=", type:'expr', array:true},
-    $ne: { description:"!=", type:'expr', array:true},
-    $cond: { description:"cond", type:'expr'},
-    if: { description:"if", type:'Expr'},
-    then: { description:"then", type:'Expr'},
-    else: { description:"else", type:'Expr'},
-    $abs: { description:"abs", type:'fields'},
-    $hour: { description:"hour", type:'fields'},
-    $minute: { description:"minute", type:'fields'},
-    $day: { description:"day", type:'fields'},
-    $month: { description:"month", type:'fields'},
-    $year: { description:"year", type:'fields'},
-  }
-}
-let OP_ROOT = {
-  description: 'operation for root level',
-  fields: {
-    $expr: OP_expr,
-    $where: {
-      description: 'where', type:'String',
-    },
-    $text: {
-      description: 'text', type: 'object',
-      fields: {
-        $search: {
-          description: 'search', type: 'String',
-        }
-      }
-    },
-    $unwind: {
-      description: 'unwind', type: 'fields',
-    },
-    $addFields: {
-      description: 'addFields', type: 'addFields'
-    }
-  }
-}
-let OP_string = {
-  description: 'operations for string',
-  type: 'string',
-  fields: {
-    $lt: { description:"<", type:'String' },
-    $gt: { description:">", type:'String' },
-    $lte: { description:"<=", type:'String' },
-    $gte: { description:">=", type:'String' },
-    $ne: { description:"!=", type:'String' },
-    $in: { description:'in', type: 'String', array: true },
-    $nin: { description:'nin', type: 'string', array: true },
-  }
-}
-let OP_number = {
-  description: 'operations for number',
-  type: 'number',
-  fields: {
-    $lt: { description:"<", type:'number' },
-    $gt: { description:">", type:'number' },
-    $lte: { description:"<=", type:'number' },
-    $gte: { description:">=", type:'number' },
-    $ne: { description:"!=", type:'number' },
-    $in: { description:'in', type: 'number', array: true },
-    $nin: { description:'nin', type: 'number', array: true },
-  }
-}
-let OP_date = {
-  description: 'operations for date',
-  type: 'date',
-  fields: {
-    $lt: { description:"<", type:'date' },
-    $gt: { description:">", type:'date' },
-    $lte: { description:"<=", type:'date' },
-    $gte: { description:">=", type:'date' },
-  }
-}
-let OP_array = {
-  description: 'operations for date',
-  fields: {
-    $lt: { description:"<", type:'unknown' },
-    $gt: { description:">", type:'unknown' },
-    $lte: { description:"<=", type:'unknown' },
-    $gte: { description:">=", type:'unknown' },
-    $ne: { description:">=", type:'unknown' },
-    $in: { description:'in', type: 'unknown', array: true },
-    $nin: { description:'nin', type: 'unknown', array: true },
-    $el: { description:'elemMatch', type: 'object' },
-    $elemMatch: { description:'elemMatch', type: 'object' },
-  }
-}
-let OP_array_number = JSON.parse(JSON.stringify(OP_array,
-  function (key, value) { if(key==='type' && value==='unknown') {return 'number'} else {return value} })
-)
-let OP_array_date = JSON.parse(JSON.stringify(OP_array,
-  function (key, value) { if(key==='type' && value==='unknown') {return 'date'} else {return value} })
-)
-let OP_array_string = JSON.parse(JSON.stringify(OP_array,
-  function (key, value) { if(key==='type' && value==='unknown') {return 'string'} else {return value} })
-)
-
-function findPath (struct, path) {
-  let thisStruct = struct
-  let history = []
-  for (let step of path) {
-    if (step in thisStruct.fields) {
-      thisStruct = thisStruct.fields[step]
-    }
-  }
-}
 Parser.prototype.autocomplete = function (input) {
   const pairKeys = ["PairComplete", "PairMissValue", 'PairOnlyOP', 'PairOnlyKey', 'ArrayWrapper']
-  let {type, subtype, valueType, stateStack, extract, cursor} = input
+  console.log(input)
+  let {type, subtype, valueType, stateStack, extract, cursor, start, end, complete, lastEnd} = input
   let path = []
   if (!type) return {type: null} // not good cursor position for auto complete
   if (stateStack && subtype !== 'ValueBlock') {
@@ -1269,15 +1270,16 @@ Parser.prototype.autocomplete = function (input) {
       }
     }
   }
+  if (!this.struct) return {type:null, path}
   let struct, root
   if (this.struct) {
     let __ = getStruct(this.struct, path)
     struct = __.struct
     root = __.root
   }
-  console.log()
   console.log({root, struct})
   console.log(
+    start,lastEnd,cursor,end,
     input,
     path,
     struct ? {
@@ -1286,13 +1288,97 @@ Parser.prototype.autocomplete = function (input) {
       root_fields:root.fields ? Object.keys(root.fields).join(','): null} : null,
   )
   //if (!this.struct) return {type:null}
+  let output = []
+  let result = {
+    start, lastEnd, cursor, end, complete, path, output
+  }
 
   if (type === 'key') {
+    if (subtype === 'fieldKey' || subtype === 'ValueBlock' || subtype === 'Key') {
+      if (this.fields.includes(extract)) {
+        let matchArray = []
+        if (struct) {
+          if (struct.fields&&struct.fields[extract]&&struct.fields[extract].type==='date') {
+            matchArray.push({
+              data: `${extract}:""`,
+              cursorOffset: -1,
+            })
+          } else {
+            matchArray.push( `${extract}:` )
+          }
+          matchArray.push( `${extract}|` )
+        } else {
+          matchArray.push({
+            data: `${extract}:`
+          })
+        }
+        output.push({
+          data: matchArray
+        })
+        output.push({
+          group: 'fields',
+          description: 'fields of a model',
+          data: this.fields.filter(_ => _!==extract)
+        })
+      } else { // not match fields
+        output.push({
+          group: 'fields',
+          description: 'fields of a model',
+          data: this.fields
+        })
+      }
+    } else if (subtype === 'KeyKey') { // balbal.asdfasd.asdf extract is array
+      let thiskey = extract[0][extract[0].length-1]
+      if (struct&&root&&'fields' in root) {
+        let fields = Object.keys(root.fields)
+        if (fields.includes(thiskey)) {
+          let matchArray = []
+          if (struct.fields&&struct.fields[thiskey]&&struct.fields[thiskey].type==='date') {
+            matchArray.push({
+              data: `${thiskey}:""`,
+              cursorOffset: -1,
+            })
+          } else {
+            matchArray.push( `${thiskey}:` )
+          }
+          matchArray.push( `${thiskey}|` )
+          output.push({
+            data: matchArray
+          })
+          output.push({
+            group: 'subfields',
+            description: 'subfields',
+            data: fields.filter(_ => _!==thiskey)
+          })
+        } else { // not exact match
+          output.push({
+            group: 'subfields',
+            description: 'subfields',
+            data: fields
+          })
+        }
+      } else {
+        output.push({
+          group: 'unknown subfields',
+          always: true,
+        })
+      }
+    } else if (subtype === 'KeyOP') { // extract is array
+      console.log('path:', root.path)
+      let len = extract.length
+      let thiskey = extract[len-1]
+      if (len===1) { // thiskey is field path
+
+      } else { // thiskey is op
+
+      }
+    }
 
   } else if (type === 'value') {
 
   }
-  return {path}
+  console.log(JSON.stringify({extract, output},null,2))
+  return result
 }
 
 module.exports = {
