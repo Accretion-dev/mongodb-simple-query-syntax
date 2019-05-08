@@ -268,7 +268,8 @@ Key "key"
     }
 
 KeyOP "keyop"
-  = head:KeyValue
+  = KeyOPKey
+  / head:KeyValue
     middle:(
       OPSeperator op:OP
       { return op }
@@ -276,6 +277,17 @@ KeyOP "keyop"
     OPSeperator ! '|'
     {
       return [head].concat(middle).concat([""])
+    }
+
+KeyOPKey "keyopkey"
+  = head:KeyValue
+    middle:(
+      OPSeperator op:OP
+      { return op }
+    )+
+    ! '|'
+    {
+      return [head].concat(middle)
     }
 
 KeyKey "keykey"
