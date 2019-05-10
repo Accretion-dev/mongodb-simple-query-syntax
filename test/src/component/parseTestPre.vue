@@ -4,7 +4,7 @@
     <button class="value" @click="cursor = Number(cursor) - 1" id='minus'> - </button>
     <button class="value" @click="cursor = Number(cursor) + 1" id='plus'> + </button>
     <button class="value" @click="printCompile" id='print'> P </button>
-    <input id='input' v-model="keyIndex" placeholder="value" />
+    <input id='input' v-model="keyIndex" placeholder="value" @change="onKeyIndexChange(0)"/>
     <span>
       <button class="value" @click="onKeyIndexChange(-1)" id='kminus'> - </button>
       <button class="value" @click="onKeyIndexChange(1)" id='kplus'> + </button>
@@ -110,15 +110,6 @@ export default {
       return result
     }
   },
-  watch: {
-    keyIndex (val) {
-      let keyIndex = Number(val)
-      if (keyIndex>=0 && keyIndex<this.keyPositions.length) {
-        this.cursor = this.keyPositions[keyIndex].end
-        this.keyPositionStr = this.keyPositions[keyIndex].type
-      }
-    }
-  },
   created () {
     this.$watch('content', this.onChangeInput)
     this.$watch('struct', this.onChangeInput)
@@ -127,19 +118,36 @@ export default {
   methods: {
     onPreTab (event) {
       if (event.shiftKey) {
-        this.keyIndex = Number(this.keyIndex) - 1
+        this.onKeyIndexChange(-1)
       } else {
-        this.keyIndex = Number(this.keyIndex) + 1
+        this.onKeyIndexChange(1)
       }
     },
     onKeyIndexChange (change) {
+      console.log('here', change)
       if (change>0) {
         if (this.keyIndex < this.keyPositions.length-1) {
           this.keyIndex = Number(this.keyIndex) + 1
+          let keyIndex = this.keyIndex
+          if (keyIndex>=0 && keyIndex<this.keyPositions.length) {
+            this.cursor = this.keyPositions[keyIndex].end
+            this.keyPositionStr = this.keyPositions[keyIndex].type
+          }
         }
-      } else {
+      } else if (change<0) {
         if (this.keyIndex > 0) {
           this.keyIndex = Number(this.keyIndex) - 1
+          let keyIndex = this.keyIndex
+          if (keyIndex>=0 && keyIndex<this.keyPositions.length) {
+            this.cursor = this.keyPositions[keyIndex].end
+            this.keyPositionStr = this.keyPositions[keyIndex].type
+          }
+        }
+      } else {
+        let keyIndex = this.keyIndex
+        if (keyIndex>=0 && keyIndex<this.keyPositions.length) {
+          this.cursor = this.keyPositions[keyIndex].end
+          this.keyPositionStr = this.keyPositions[keyIndex].type
         }
       }
     },
@@ -179,6 +187,13 @@ export default {
           } else {
             this.cursor = offset + nodes[0].data.length
           }
+        }
+      }
+      if (this.keyPositions.length) {
+        let keyIndex = this.keyPositions.findIndex(_ => this.cursor<=_.end)
+        if (keyIndex>-1) {
+          this.keyIndex = keyIndex
+          this.keyPositionStr = this.keyPositions[keyIndex].type
         }
       }
     },

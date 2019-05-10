@@ -95,16 +95,16 @@ Block "block"
   / ValueBlock
 
 NestedORBlock 'nestedorblock'
-  = NestedStart ws10 v:OR ws01 NestedEnd  {return v}
+  = nestedStart ws10 v:OR ws01 nestedEnd  {return v}
 NestedANDBlock 'nestedandblock'
-  = NestedStart ws10 v:AND ws01 NestedEnd  {return v}
+  = nestedStart ws10 v:AND ws01 nestedEnd  {return v}
 NestedPairBlock 'nestedpairblock'
-  = NestedStart ws10 v:Pair ws01 NestedEnd  {return v}
+  = nestedStart ws10 v:Pair ws01 nestedEnd  {return v}
 NestedValueBlock 'nestedvalueblock'
-  = NestedStart ws10 v:ValueBlock ws01 NestedEnd  {return v}
+  = nestedStart ws10 v:ValueBlock ws01 nestedEnd  {return v}
 
-NestedStart = "("
-NestedEnd = ")"
+nestedStart = "("
+nestedEnd = ")"
 
 ANDSeperator
   = ws01 '&&' { return text() }

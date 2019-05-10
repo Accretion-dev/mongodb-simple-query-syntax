@@ -467,27 +467,27 @@ Tracer.prototype.getAutocompleteType = function (cursor, log, detail, print) {
     }
     if (type === 'ws00' && (start<cursor && cursor<end)) {
       // select field, complete: insert into cursor position, extract: ""
-      output = {type: 'key', subtype: 'fieldKey', complete: 'insert', extract:[], start: cursor, end:cursor}
+      output = {type: 'key', subtype: 'fieldKey', complete: 'insert', rawtype: type, extract:"", start: cursor, end:cursor, stateStack}
       break
     } else if (type === 'ws01' && (start<cursor && cursor<=end)) {
       // select field, complete: insert into cursor position, extract: ""
-      output = {type: 'key', subtype: 'fieldKey', complete: 'insert', extract:"", start: cursor, end:cursor}
+      output = {type: 'key', subtype: 'fieldKey', complete: 'insert', rawtype: type, extract:"", start: cursor, end:cursor, stateStack}
       break
     } else if (type === 'ws10' && (start<=cursor && cursor<end)) {
       // select field, complete: insert into cursor position, extract: ""
-      output = {type: 'key', subtype: 'fieldKey', complete: 'insert', extract:"", start: cursor, end:cursor}
+      output = {type: 'key', subtype: 'fieldKey', complete: 'insert', rawtype: type, extract:"", start: cursor, end:cursor, stateStack}
       break
     } else if (type === 'ws10Object' && (start<=cursor && cursor<end)) {
-      output = {type: 'key', subtype: 'objectKey', complete: 'insert', extract:"", start: cursor, end:cursor, stateStack}
+      output = {type: 'key', subtype: 'objectKey', complete: 'insert', rawtype: type, extract:"", start: cursor, end:cursor, stateStack}
       break
     } else if (type === 'ws01Object' && (start<cursor && cursor<=end)) {
-      output = {type: 'key', subtype: 'objectKey', complete: 'insert', extract:"", start: cursor, end:cursor, stateStack}
+      output = {type: 'key', subtype: 'objectKey', complete: 'insert', rawtype: type, extract:"", start: cursor, end:cursor, stateStack}
       break
     } else if (type === 'ws10Array' && (start<=cursor && cursor<end)) {
-      output = {type: 'value', subtype: 'arrayValue', complete: 'insert', extract:"", start: cursor, end:cursor, stateStack}
+      output = {type: 'value', subtype: 'arrayValue', complete: 'insert', rawtype: type, extract:"", start: cursor, end:cursor, stateStack}
       break
     } else if (type === 'ws01Array' && (start<cursor && cursor<=end)) {
-      output = {type: 'value', subtype: 'arrayValue', complete: 'insert', extract:"", start: cursor, end:cursor, stateStack}
+      output = {type: 'value', subtype: 'arrayValue', complete: 'insert', rawtype: type, extract:"", start: cursor, end:cursor, stateStack}
       break
     } else if (type === 'ValueBlock') {
       if (value.type === 'SimpleString') {
@@ -656,6 +656,20 @@ Tracer.prototype.getAutocompleteType = function (cursor, log, detail, print) {
         }
       }
       break
+    } else if (type.startsWith('Nested')) {
+      if (start===cursor || cursor===end) {
+        output = {
+          type: 'edge',
+          subtype: type,
+          valueType: 'logical',
+          complete: null,
+          start,
+          end,
+          value: each.result,
+          stateStack,
+        }
+        break
+      }
     }
   }
 
@@ -1362,10 +1376,11 @@ function getPath(type, stack, cursor, extract) {
   }
   return {path, rawpath}
 }
-function isInLastAnd(stack, cursor) {
+function isInLastAnd(stack, cursor, rawtype) {
   const keys = ['AND','OR', 'ANDArrayWrapper', 'ORArrayWrapper']
   const subkeys = ['ANDArrayWrapper', 'ORArrayWrapper']
   let result
+  if (stack.length === 0 && rawtype==='ws01') return true
   for (let item of stack) { // for value
     if (!keys.includes(item.type)) {
       if (result !== undefined) {
@@ -1387,11 +1402,10 @@ function isInLastAnd(stack, cursor) {
   }
 }
 Parser.prototype.autocomplete = function (input) {
-  console.log({input, this:this})
-  let {type, subtype, valueType, stateStack, extract, cursor, start, end, complete, lastEnd} = input
+  let {type, subtype, valueType, stateStack, extract, cursor, start, end, complete, lastEnd, rawtype} = input
+  console.log({input, stateStack})
   let path = []
   let rawpath = []
-  let inLastAnd
   if (!type) return {type: null} // not good cursor position for auto complete
   if (stateStack && subtype !== 'ValueBlock') {
     let stack = stateStack.filter(_ => !(['AND','OR', 'ANDArrayWrapper', 'ORArrayWrapper'].includes(_.type)))
@@ -1399,8 +1413,8 @@ Parser.prototype.autocomplete = function (input) {
     __ = getPath(type, stack, cursor, extract)
     path = __.path
     rawpath = __.rawpath
-    inLastAnd = isInLastAnd(stateStack)
   }
+  let inLastAnd = isInLastAnd(stateStack, cursor, rawtype)
   console.log('path:', path, 'rawpath:', rawpath, 'inLastAnd:', inLastAnd)
   if (!this.struct) return {type:null, path} // do not do autocomplete without struct infomation
   let struct, root
