@@ -1099,7 +1099,7 @@ function getStruct(struct, path, type) {
   }
   return {struct:current_struct, root:current_root}
 }
-// TODO: support syntax sugger for primary_key
+// TODOs: support syntax sugger for primary_key
 Parser.prototype.compile = function (input, parent, key, path, level, state) {
   let result = {}
   let error = []
@@ -1406,6 +1406,7 @@ function getPath(type, stack, cursor, extract) {
   }
   return {path, rawpath}
 }
+// TODOs: autocomplete several values
 Parser.prototype.autocomplete = function (input) {
   let {type, subtype, valueType, stateStack, extract, cursor, start, end, complete, lastEnd, rawtype} = input
   console.log('===================================================================================')
