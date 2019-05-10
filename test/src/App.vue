@@ -473,6 +473,8 @@ let testData = {
         tags.tag_name|in:[],
         tags.tag_name|in:['good'],
       ] ||
+      tags: []         ||
+      tags: [123, 234] ||
       tags: {$in:[]}   ||
       tags: {$in:['123','456']}   ||
       tags|                     ||

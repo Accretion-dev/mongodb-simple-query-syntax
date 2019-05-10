@@ -124,7 +124,6 @@ export default {
       }
     },
     onKeyIndexChange (change) {
-      console.log('here', change)
       if (change>0) {
         if (this.keyIndex < this.keyPositions.length-1) {
           this.keyIndex = Number(this.keyIndex) + 1
