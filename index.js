@@ -65,7 +65,7 @@ const OP_string = {
     $lte: { description:"<=", type:'String' },
     $gte: { description:">=", type:'String' },
     $ne: { description:"!=", type:'String' },
-    $in: { description:'in', type: 'String', array: true },
+    $in: { description:'in', type: 'string', array: true },
     $nin: { description:'nin', type: 'string', array: true },
   }
 }
@@ -90,6 +90,13 @@ const OP_date = {
     $gt: { description:">", type:'date' },
     $lte: { description:"<=", type:'date' },
     $gte: { description:">=", type:'date' },
+  }
+}
+const OP_global = {
+  description: 'operations for all fields',
+  fields: {
+    $exists: { description:'exists', type: 'Boolean' },
+    $type: { description:'type', type: 'number' },
   }
 }
 const OP_array_object = {
@@ -122,6 +129,22 @@ const OP_array_date = JSON.parse(JSON.stringify(OP_array,
 const OP_array_string = JSON.parse(JSON.stringify(OP_array,
   function (key, value) { if(key==='type' && value==='unknown') {return 'string'} else {return value} })
 )
+const OPDict = {
+  global: Object.keys(OP_global.fields),
+  logical: ['$and','$or'],
+  object: [],
+  root: ['$expr','$where'],
+  root_full: ['$expr','$where','$text','$unwind','$addFields'],
+  expr: Object.keys(OP_expr.fields),
+  string: Object.keys(OP_string.fields),
+  String: Object.keys(OP_string.fields),
+  number: Object.keys(OP_number.fields),
+  date: Object.keys(OP_date.fields),
+  array_string: Object.keys(OP_array_string.fields),
+  array_number: Object.keys(OP_array_number.fields),
+  array_date:   Object.keys(OP_array_date.fields),
+  array_object:   Object.keys(OP_array_object.fields),
+}
 
 /*
 TODO:
@@ -396,37 +419,30 @@ Tracer.prototype.getAutocompleteType = function (cursor, log, detail, print) {
   let value
   let output
 
-  let state
   let stateStack = []
   let parent = 'block'
   const structRules = ['PairComplete', 'PairMissValue', 'PairOnlyOP', 'PairOnlyKey', 'Key', 'ValuePair', 'ValueArray', 'ValueObject']
   const valueTypes = [ 'true', 'false', 'null', 'String', 'SimpleString', 'Number', 'RegularExpression' ]
   // get structure for this object
+  const stateKeys = [
+    'PairComplete',
+    'PairMissValue',
+    'PairOnlyOP',
+    'PairOnlyKey',
+    'Object',
+    'Array',
+    'ArrayWrapper',
+    'AND',
+    'OR',
+    'ANDArrayWrapper',
+    'ORArrayWrapper',
+  ]
   for (let each of related) {
     let {rule:type, location, result} = each
     let start = location.start.offset
     let end = location.end.offset
-    if (type === 'PairComplete') {
+    if (stateKeys.includes(type)) {
       stateStack.push({ type, start, end, result})
-      state = type
-    } else if (type === 'PairMissValue') {
-      stateStack.push({ type, start, end, result})
-      state = type
-    } else if (type === 'PairOnlyOP') {
-      stateStack.push({ type, start, end, result})
-      state = type
-    } else if (type === 'PairOnlyKey') {
-      stateStack.push({ type, start, end, result})
-      state = type
-    } else if (type === 'Object') {
-      stateStack.push({ type, start, end, result })
-      state = type
-    } else if (type === 'Array') {
-      stateStack.push({ type, start, end, result })
-      state = type
-    } else if (type === 'ArrayWrapper') {
-      stateStack.push({ type, start, end, result })
-      state = type
     }
   }
 
@@ -730,11 +746,47 @@ Tracer.prototype.traceback = function () {
   let stack = []
   let topObj
   this.traceInfo = []
+  this.keyPositions = []
   const stopRules = [
     'ws10', 'ws01', 'ws00', 'Key', 'String', 'SimpleString',
     'ws01Object', 'ws10Object', 'ws01Array', 'ws10Array',
     'ws01PS',
   ]
+  const valueTypes = [
+    'Key', 'KeyKey',
+    'ws01PS', 'KeyOP',
+    'SimpleString',
+  ]
+  const valueConditionTypes = {
+    Object: {
+      filter: _ => Object.keys(_.result).length === 0,
+      pos: _ => _.location.end.offset-1,
+    },
+    Array: {
+      filter: _ => _.result.length === 0,
+      pos: _ => _.location.end.offset-1,
+    },
+    SimpleValue: {
+      filter: _ => typeof(_.result) !== 'string' && !(_.result instanceof RegExp),
+      pos: _ => _.location.end.offset,
+    },
+    String: {
+      filter: _ => true,
+      pos: _ => _.location.end.offset-1,
+    },
+    RegularExpression: {
+      filter: _ => true,
+      pos: _ => _.location.end.offset-1,
+    },
+    ws10: {
+      filter: _ => _.location.start.offset === 0 && (_.location.end.offset > _.location.start.offset),
+      pos: _ => _.location.end.offset - 1,
+    },
+    ws01: {
+      filter: _ => _.location.end.offset === this.content.length && (_.location.end.offset > _.location.start.offset),
+      pos: _ => _.location.start.offset + 1,
+    },
+  }
   let stop = false
   let failed = false
   let slevel = 0
@@ -768,6 +820,20 @@ Tracer.prototype.traceback = function () {
       }
     }
   }
+  for (let each of this.traceInfo) {
+    let {rule} = each
+    let start = each.location.start.offset
+    let end = each.location.end.offset
+    if (valueTypes.includes(rule)) {
+      this.keyPositions.push({type: rule, start, end})
+    } else if (rule in valueConditionTypes) {
+      let __ =  valueConditionTypes[rule]
+      if (__.filter(each)) {
+        this.keyPositions.push({type: rule, end: __.pos(each), start})
+      }
+    }
+  }
+  this.keyPositions = this.keyPositions.reverse()
   this.traceInfo = this.traceInfo.reverse()
 }
 Tracer.prototype.retrace = function (event) {
@@ -829,7 +895,7 @@ Tracer.prototype.trace = function (event) {
   if (type === 'rule.enter') {
     this.level += 1
   }
-  if (rule === 'start' && type === 'rule.match') {
+  if (rule === 'start' && type === 'rule.match') { // finish trace, do traceback
     this.traceback()
     if (this.logSimple) {
       console.log('===============trace tree================')
@@ -840,18 +906,6 @@ Tracer.prototype.trace = function (event) {
   }
 }
 
-const OPDict = {
-  logical: ['$and','$or'],
-  root: ['$expr','$where','$text','$unwind','$addFields'],
-  expr: Object.keys(OP_expr.fields),
-  string: Object.keys(OP_string.fields),
-  number: Object.keys(OP_number.fields),
-  date: Object.keys(OP_date.fields),
-  array_string: Object.keys(OP_array_string.fields),
-  array_number: Object.keys(OP_array_number.fields),
-  array_date:   Object.keys(OP_array_date.fields),
-  array_object:   Object.keys(OP_array_object.fields),
-}
 function Parser({struct, options} = {}) {
   this.struct = struct
   if (this.struct) {
@@ -909,6 +963,8 @@ function getTypeStruct(key, type) {
     return null
   } else if (type === 'number') {
     ops = OP_number
+  } else if (type === 'Bollean') {
+    return null
   } else if (type === 'date') {
     ops = OP_date
   } else if (type === 'expr') {
@@ -1219,86 +1275,134 @@ Parser.prototype.compile = function (input, parent, key, path, level, state) {
     return {result  , error}
   }
 }
-Parser.prototype.autocomplete = function (input) {
-  const pairKeys = ["PairComplete", "PairMissValue", 'PairOnlyOP', 'PairOnlyKey', 'ArrayWrapper']
-  console.log(input)
-  let {type, subtype, valueType, stateStack, extract, cursor, start, end, complete, lastEnd} = input
+
+function getPath(type, stack, cursor, extract) {
   let path = []
-  if (!type) return {type: null} // not good cursor position for auto complete
-  if (stateStack && subtype !== 'ValueBlock') {
-    let parentStacks = type === 'key' ? stateStack.slice(0,-1) : stateStack
-    for (let item of parentStacks) { // for value
-      if (!pairKeys.includes(item.type)) continue
-      if (item.type === 'ArrayWrapper') {
-        let index = item.result.findIndex(_ => _.location.start.offset<=cursor && cursor<=_.location.end.offset)
-        if (index !== -1) {
-          path.push(index)
+  let rawpath = []
+  const pairKeys = ["PairComplete", "PairMissValue", 'PairOnlyOP', 'PairOnlyKey', 'ArrayWrapper']
+  let parentStacks = type === 'key' ? stack.slice(0,-1) : stack
+  for (let item of parentStacks) { // for value
+    if (!pairKeys.includes(item.type)) continue
+    if (item.type === 'ArrayWrapper') {
+      let index = item.result.findIndex(_ => _.location.start.offset<=cursor && cursor<=_.location.end.offset)
+      if (index !== -1) {
+        path.push(index)
+        rawpath.push(index)
+      }
+    } else {
+      let keys = item.result.keys
+      if (keys.length === 1) {
+        if (keys[0].indexOf('.')>=0) {
+          let subkeys = keys[0].split('.')
+          for (let subkey of subkeys) {
+            if (subkey) path.push(subkey)
+          }
+        } else {
+          path.push(keys[0])
         }
-      } else {
-        let keys = item.result.keys
-        if (keys.length === 1) {
-          if (keys[0].indexOf('.')>=0) {
-            let subkeys = keys[0].split('.')
-            for (let subkey of subkeys) {
-              if (subkey) path.push(subkey)
-            }
-          } else {
-            path.push(keys[0])
+        rawpath.push(keys[0])
+      } else if (keys.length > 1) {
+        if (keys[0].indexOf('.')>=0) {
+          let subkeys = keys[0].split('.')
+          for (let subkey of subkeys) {
+            if (subkey) path.push(subkey)
           }
-        } else if (keys.length > 1) {
-          if (keys[0].indexOf('.')>=0) {
-            let subkeys = keys[0].split('.')
-            for (let subkey of subkeys) {
-              if (subkey) path.push(subkey)
-            }
-          } else {
-            path.push(keys[0])
-          }
-          let tails = keys.slice(1)
-          for (let _ of tails) {
-            path.push(`\$${_}`)
-          }
+        } else {
+          path.push(keys[0])
+        }
+        rawpath.push(keys[0])
+        let tails = keys.slice(1)
+        for (let _ of tails) {
+          path.push(`\$${_}`)
+          rawpath.push(`\$${_}`)
         }
       }
     }
-    if (type === 'key') { // for nested key operations
-      let keys
-      if (extract === undefined) {
-        keys = null // extract is undefined, inside empty {} or []
-      } else if (Array.isArray(extract[0]) && extract.length === 1) {
-        keys = [...extract]
-        keys[0] = keys[0].slice(0,-1)
-      } else {
-        keys = extract.slice(0,-1)
-      } // else extract is undefined
-      if (keys) {
-        if (keys.length === 1) {
-          if (Array.isArray(keys[0])) {
-            let subkeys = keys[0]
-            for (let subkey of subkeys) {
-              if (subkey) path.push(subkey)
-            }
-          } else {
-            path.push(keys[0])
+  }
+  if (type === 'key') { // for nested key operations
+    let keys
+    if (extract === undefined) {
+      keys = null // extract is undefined, inside empty {} or []
+    } else if (Array.isArray(extract[0]) && extract.length === 1) {
+      keys = [...extract]
+      keys[0] = keys[0].slice(0,-1)
+    } else {
+      keys = extract.slice(0,-1)
+    } // else extract is undefined
+    if (keys) {
+      if (keys.length === 1) {
+        if (Array.isArray(keys[0])) {
+          let subkeys = keys[0]
+          for (let subkey of subkeys) {
+            if (subkey) path.push(subkey)
           }
-        } else if (keys.length > 1){
-          if (Array.isArray(keys[0])) {
-            let subkeys = keys[0]
-            for (let subkey of subkeys) {
-              if (subkey) path.push(subkey)
-            }
-          } else {
-            path.push(keys[0])
-          }
-          let tails = keys.slice(1)
-          for (let _ of tails) {
-            path.push(`\$${_}`)
-          }
+          rawpath.push(subkeys.join('.'))
+        } else {
+          path.push(keys[0])
+          rawpath.push(keys[0])
         }
-      } // else extract is undefined, inside empty {} or []
+      } else if (keys.length > 1){
+        if (Array.isArray(keys[0])) {
+          let subkeys = keys[0]
+          for (let subkey of subkeys) {
+            if (subkey) path.push(subkey)
+          }
+          rawpath.push(subkeys.join('.'))
+        } else {
+          path.push(keys[0])
+          rawpath.push(keys[0])
+        }
+        let tails = keys.slice(1)
+        for (let _ of tails) {
+          path.push(`\$${_}`)
+          rawpath.push(`\$${_}`)
+        }
+      }
+    } // else extract is undefined, inside empty {} or []
+  }
+  return {path, rawpath}
+}
+function isInLastAnd(stack, cursor) {
+  const keys = ['AND','OR', 'ANDArrayWrapper', 'ORArrayWrapper']
+  const subkeys = ['ANDArrayWrapper', 'ORArrayWrapper']
+  let result
+  for (let item of stack) { // for value
+    if (!keys.includes(item.type)) {
+      if (result !== undefined) {
+        return result
+      } else {
+        debugger
+      }
+    } else {
+      if (subkeys.includes(item.type)) {
+        let index = item.result.findIndex(_ => _.location.start.offset<=cursor && cursor<=_.location.end.offset)
+        let length = item.result.length
+        if (index !== length - 1) {
+          return false
+        } else {
+          result = true
+        }
+      }
     }
   }
-  if (!this.struct) return {type:null, path}
+}
+Parser.prototype.autocomplete = function (input) {
+  console.log({input, this:this})
+  let {type, subtype, valueType, stateStack, extract, cursor, start, end, complete, lastEnd} = input
+  let path = []
+  let rawpath = []
+  let inLastAnd
+  if (!type) return {type: null} // not good cursor position for auto complete
+  if (stateStack && subtype !== 'ValueBlock') {
+    let stack = stateStack.filter(_ => !(['AND','OR', 'ANDArrayWrapper', 'ORArrayWrapper'].includes(_.type)))
+    console.log('stack:', stack)
+    __ = getPath(type, stack, cursor, extract)
+    path = __.path
+    rawpath = __.rawpath
+    inLastAnd = isInLastAnd(stateStack)
+  }
+  console.log('path:', path, 'rawpath:', rawpath, 'inLastAnd:', inLastAnd)
+  if (!this.struct) return {type:null, path} // do not do autocomplete without struct infomation
   let struct, root
   if (this.struct) {
     let __ = getStruct(this.struct, path)
@@ -1309,7 +1413,6 @@ Parser.prototype.autocomplete = function (input) {
   console.log(
     start,lastEnd,cursor,end,
     input,
-    'path:', path,
     struct ? {
       type: struct.type,
       array: struct.array,
@@ -1318,17 +1421,18 @@ Parser.prototype.autocomplete = function (input) {
   //if (!this.struct) return {type:null}
   let output = []
   let result = {
-    start, lastEnd, cursor, end, complete, path, output
+    start, lastEnd, cursor, end, complete, path, rawpath, output
   }
 
+
   let structPath = path.filter(_ => typeof(_)!=='number')
-  let isSubTop = path.findIndex(_ => _==='$el' || _==='$elemMatch') > -1
+  let isInSubTop = path.findIndex(_ => _==='$el' || _==='$elemMatch') > -1
+  let isSubTop = isInSubTop && ['$and', '$or'].includes(structPath[structPath.length-1])
   let isTop = !isSubTop && (path.length === 0 || ['$and', '$or', '$el', '$elemMatch'].includes(structPath[structPath.length-1]))
   console.log({structPath, isTop, isSubTop})
-  if (type === 'key') {
+  if (type === 'key' || (type==="value" && (subtype === 'arrayValue' && (isTop || isSubTop)))) {
     if (subtype === 'fieldKey' ||
         subtype === 'ValueBlock' ||
-        subtype === 'Key' ||
         subtype === 'objectKey' ||
         (subtype === 'arrayValue' && (isTop || isSubTop)) ||
         subtype === 'KeyKey' ||
@@ -1377,21 +1481,57 @@ Parser.prototype.autocomplete = function (input) {
         }
       } else { // unknown (struct and root)
         output.push({
-          group: `${path.join('.')}.?`,
+          group: `${rawpath.join('.')}.?`,
           always: true,
         })
       }
-    } else if (subtype === 'KeyOP') { // extract is array
+      if (isTop || isSubTop) {
+        if (isTop) {
+          output.push({
+            group: 'root ops',
+            description: 'operation in the root level',
+            data: OPDict.root
+          })
+          output.push({
+            group: 'logical ops',
+            data: OPDict.logical
+          })
+        } else if (isSubTop) {
+          output.push({
+            group: 'logical ops',
+            data: OPDict.logical
+          })
+        }
+      }
+    } else if (subtype === 'KeyOP') { // subtype is KeyOP and len(extract) > 1
       let len = extract.length
       let thiskey = extract[len-1]
-      if (len===1) { // thiskey is field path
-
-      } else { // thiskey is op
-
+      if (struct) {
+        let optype = struct.type
+        let ops = OPDict[optype]
+        if (ops.length>0) {
+          ops = ops.filter(_ => _.startsWith('$')).map(_ => _.slice(1))
+          output.push({
+            group: `${optype} ops`,
+            data:ops,
+          })
+        }
+        output.push({
+          group: `global ops`,
+          data: OPDict.global,
+        })
+      } else {
+        output.push({
+          group: `unknown operations`,
+          always: true,
+        })
       }
+    } else if (subtype === 'Key') { // do not complete for complete keys
     }
-
   } else if (type === 'value') {
+    if (subtype === 'pairValueNull') {
+
+    }
 
   }
   console.log(JSON.stringify({extract, output},null,2))

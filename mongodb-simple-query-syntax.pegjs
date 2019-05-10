@@ -27,6 +27,9 @@ StartAND "startand"
     }
   }
 
+sws "singlewhitespace"
+  = chars:[ \t\n\r]
+
 ws "whitespace"
   = chars:[ \t\n\r]* { return chars.join("") }
 
@@ -40,19 +43,48 @@ ws10 'ws10'
 ws01 'ws01'
   = ws
 
+//OR "or"
+//  = head:ANDBlock
+//    tail:(ws01 ORSeperator ws10 v:ANDBlock { return v; })+
+//    { return {$or: [head].concat(tail)}; }
+//AND "and"
+//  = head:Block
+//    tail:(ANDSeperator ws10 v:Block { return v; })+
+//    { return {$and: [head].concat(tail)}; }
+
 OR "or"
-  = head:ANDBlock
-    tail:(ws01 ORSeperator ws10 v:ANDBlock { return v; })+
-    { return {$or: [head].concat(tail)}; }
+  = v:ORArrayWrapper
+    { return {$or: v.map(_ => _.value)} }
+
+ORArrayWrapper "orarraywrapper"
+  = values:(
+    head:ANDBlockPos
+    tail:(ws01 ORSeperator ws10 v:ANDBlockPos { return v; })+
+    { return [head].concat(tail) }
+  )
+  {return values}
 
 AND "and"
-  = head:Block
-    tail:(ANDSeperator ws10 v:Block { return v; })+
-    { return {$and: [head].concat(tail)}; }
+  = v:ANDArrayWrapper
+    { return {$and: v.map(_ => _.value)} }
+
+ANDArrayWrapper "andarray"
+  = values:(
+    head:BlockPos
+    tail:(ANDSeperator ws10 v:BlockPos { return v; })+
+    { return [head].concat(tail) }
+  )
+  {return values}
 
 ANDBlock "andblock"
   = AND
   / Block
+
+BlockPos "blockpos"
+  = value:Block {return {value, location: location()} }
+
+ANDBlockPos "andblockpos"
+  = value:ANDBlock {return {value, location: location()} }
 
 Block "block"
   = NestedORBlock
@@ -237,7 +269,8 @@ PairOnlyKey "paironlykey"
     }
 
 ws01PS "pws01"
-  = PairSeperator ws?
+  = PairSeperator sws
+  / PairSeperator
 
 OPSeperator
   = '|'

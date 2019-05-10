@@ -1,14 +1,15 @@
 <template>
   <div :class="clsPrefix">
-    <input id='input'
-           v-model="cursor"
-           placeholder="value"
-           @keydown.right.prevent="cursor = Number(cursor) + 1"
-           @keydown.left.prevent="cursor = Number(cursor) - 1"
-    />
+    <input id='input' v-model="cursor" placeholder="value" />
     <button class="value" @click="cursor = Number(cursor) - 1" id='minus'> - </button>
     <button class="value" @click="cursor = Number(cursor) + 1" id='plus'> + </button>
     <button class="value" @click="printCompile" id='print'> P </button>
+    <input id='input' v-model="keyIndex" placeholder="value" />
+    <span>
+      <button class="value" @click="onKeyIndexChange(-1)" id='kminus'> - </button>
+      <button class="value" @click="onKeyIndexChange(1)" id='kplus'> + </button>
+      <span>{{keyPositionStr}}</span>
+    </span>
     <template v-if="debug">
       <template v-if="typeof(debug.analysis.print)==='string'">
         <pre ref="pre"
@@ -17,6 +18,7 @@
              @keydown.left="onMove"
              @keydown.up="onMove"
              @keydown.down="onMove"
+             @keydown.tab.prevent="onPreTab"
             contenteditable="true"
         >{{debug.analysis.print}}</pre>
       </template>
@@ -27,6 +29,7 @@
              @keydown.left="onMove"
              @keydown.up="onMove"
              @keydown.down="onMove"
+             @keydown.tab.prevent="onPreTab"
              contenteditable="true"
         >{{debug.analysis.print.head}}<span class='highlight'>{{debug.analysis.print.middle}}</span>{{debug.analysis.print.tail}}</pre>
       </template>
@@ -72,6 +75,9 @@ export default {
   data () {
     return {
       parser: null,
+      keyPositions: [],
+      keyPositionStr:"",
+      keyIndex: -1,
       clsPrefix,
       lodash,
       cursor: 0,
@@ -104,15 +110,43 @@ export default {
       return result
     }
   },
+  watch: {
+    keyIndex (val) {
+      let keyIndex = Number(val)
+      if (keyIndex>=0 && keyIndex<this.keyPositions.length) {
+        this.cursor = this.keyPositions[keyIndex].end
+        this.keyPositionStr = this.keyPositions[keyIndex].type
+      }
+    }
+  },
   created () {
     this.$watch('content', this.onChangeInput)
     this.$watch('struct', this.onChangeInput)
     this.onChangeInput()
   },
   methods: {
+    onPreTab (event) {
+      if (event.shiftKey) {
+        this.keyIndex = Number(this.keyIndex) - 1
+      } else {
+        this.keyIndex = Number(this.keyIndex) + 1
+      }
+    },
+    onKeyIndexChange (change) {
+      if (change>0) {
+        if (this.keyIndex < this.keyPositions.length-1) {
+          this.keyIndex = Number(this.keyIndex) + 1
+        }
+      } else {
+        if (this.keyIndex > 0) {
+          this.keyIndex = Number(this.keyIndex) - 1
+        }
+      }
+    },
     onChangeInput () {
       this.parser = new Parser({struct: this.struct, options:{print: true, logFull: false}})
       let result = this.parser.parse({content: this.content})
+      this.keyPositions = this.parser.tracer.keyPositions
       if (this.contentObj && !equal(result, this.contentObj)) {
         console.log({expect: this.contentObj, actual: result})
         console.log(diff(result, this.contentObj))
