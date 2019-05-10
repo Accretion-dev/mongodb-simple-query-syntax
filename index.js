@@ -1079,6 +1079,7 @@ function getSubStruct (key, current_struct, path, index, vtype) {
 function getStruct(struct, path, type) {
   let current_struct = struct
   let current_root = struct
+  let current_field = null
   let last_current_struct
   let {root} = struct
   for (let index in path) {
@@ -1086,6 +1087,9 @@ function getStruct(struct, path, type) {
     let each = path[index]
     if (!root || (root &&!(each === "$and" || each === "$or"))) {
       if (root) root = false
+      if (current_root.fields && each in current_root.fields) {
+        current_field = current_root.fields[each]
+      }
       last_current_struct = current_struct
       current_struct = getSubStruct(each, current_struct, path, index, type)
       if (!current_struct) { return {struct:null} } // can not parse struct
@@ -1097,7 +1101,7 @@ function getStruct(struct, path, type) {
       }
     } // else level not change
   }
-  return {struct:current_struct, root:current_root}
+  return {struct:current_struct, root:current_root, field: current_field}
 }
 // TODOs: support syntax sugger for primary_key
 Parser.prototype.compile = function (input, parent, key, path, level, state) {
@@ -1430,13 +1434,18 @@ Parser.prototype.autocomplete = function (input) {
   let isTop = !isSubTop && (path.length === 0 || ['$and', '$or'].includes(structPath[structPath.length-1]))
   let isKey = type === 'key' || (type==="value" && (subtype === 'arrayValue' && (isTop || isSubTop)))
 
-  let struct, root
+  let struct, root, field
   if (this.struct) {
     let __ = getStruct(this.struct, structPath, isKey?'key':'value')
     struct = __.struct
     root = __.root
+    field = __.field
   }
-  console.log({root:root?JSON.parse(JSON.stringify(root)):null, struct:struct?JSON.parse(JSON.stringify(struct)):null})
+  console.log({
+    root:root?JSON.parse(JSON.stringify(root)):null,
+    struct:struct?JSON.parse(JSON.stringify(struct)):null,
+    field:field?JSON.parse(JSON.stringify(field)):null,
+  })
   console.log(
     start,lastEnd,cursor,end,
     input,
@@ -1448,7 +1457,7 @@ Parser.prototype.autocomplete = function (input) {
   //if (!this.struct) return {type:null}
   let output = []
   let result = {
-    type:null, complete, valueType:null, path, rawpath, start, lastEnd, cursor, end, output
+    type:null, complete, valueType:null, completeType: null, completeField: null ,extract, path, rawpath, start, lastEnd, cursor, end, output
   }
 
   console.log({structPath, isTop, isSubTop, isKey})
@@ -1464,14 +1473,27 @@ Parser.prototype.autocomplete = function (input) {
       let thiskey
       if (subtype === 'KeyKey') {
         thiskey = extract[0][extract[0].length-1]
+      } else if (subtype === 'objectKey') {
+        if (!extract) {
+          thiskey = ''
+        } else {
+          thiskey = extract[0]
+        }
       } else {
         // when subtype is key, thiskey is a array and will not match, as expected
         thiskey = extract
       }
 
       if (struct&&root&&'fields' in root) { // known struct and root
-        if (struct.type !== 'ObjArray_or_string' || ['KeyKey', 'KeyOP'].includes(subtype)) {
+        //if (struct.type !== 'ObjArray_or_string' && subtype==="objectKey") {
+        //  output.push({
+        //    group: `${path[path.length-1]} object ops`,
+        //    data: OPDict[struct.type],
+        //  })
+        //} else 
+        if (struct.type !== 'ObjArray_or_string' || ['KeyKey', 'KeyOP', 'fieldKey'].includes(subtype)) {
           let fields = Object.keys(root.fields)
+          console.log({thiskey, fields})
           if (fields.includes(thiskey)) { // exactly match a field
             let matchArray = []
             if (struct) {
@@ -1573,7 +1595,7 @@ Parser.prototype.autocomplete = function (input) {
         }
         output.push({
           group: `global ops`,
-          data: OPDict.global,
+          data: OPDict.global.map(_ => _.slice(1)),
         })
       } else {
         output.push({
@@ -1590,6 +1612,10 @@ Parser.prototype.autocomplete = function (input) {
     }
   } else if (type === 'value') {
     result.type = 'value'
+    if (field) {
+      result.completeType = field.type
+      result.completeField = field.path
+    }
     if (struct) {
       result.valueType = struct.type
     } else {
