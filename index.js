@@ -165,7 +165,14 @@ const OPDict = {
   array_date:   Object.keys(OP_array_date.fields),
   array_object:   Object.keys(OP_array_object.fields),
 }
-
+const OPObjDict = {
+  string: OP_string,
+  String: OP_string,
+  number: OP_number,
+  expr: OP_expr,
+  Expr: OP_expr,
+  date: OP_date,
+}
 /*
 TODO:
   * support reg
@@ -1328,7 +1335,7 @@ Parser.prototype.compile = function (input, parent, key, path, level, state) {
 const testAutoComplete = [
   `title: haha`,
   `title: 'hehe'`,
-  `title: {$gt:'123', $lt:foo}`,
+  `title: {$gt:'123', $in:[1,2]}`,
   `title|lt: foo`,
   `title|in:[foo,"haha hehe"]`,
   `title: [123]`,
@@ -1364,6 +1371,91 @@ const testAutoComplete = [
   `$expr|and:[$or:[$lt:[$hour:"$ctime", 10]], $eq:["$title", /foo/]]`,
   'last "search template" -gg',
 ]
+const valueCompleteDict = {
+  ObjArray_or_string: _ => ([
+    {data:`""`, cursorOffset:-1},
+    {data:`//`, cursorOffset:-1},
+    {data:`{}`, cursorOffset:-1},
+    {data:`[]`, cursorOffset:-1},
+  ]),
+  String: _ => ([
+    {data:`""`, cursorOffset:-1},
+  ]),
+  date: _ => ([
+    {data:`""`, cursorOffset:-1},
+  ]),
+  array: _ => ([
+    {data:`[]`, cursorOffset:-1},
+  ]),
+  object: _ => ([
+    {data:`{}`, cursorOffset:-1},
+  ]),
+  expr: _ => ([
+    {data:`{}`, cursorOffset:-1},
+  ]),
+  Expr: _ => ([
+    {data:`{}`, cursorOffset:-1},
+  ]),
+  string: _ => ([
+    {data:`""`, cursorOffset:-1},
+    {data:`//`, cursorOffset:-1},
+    {data:`{}`, cursorOffset:-1},
+  ]),
+}
+const keyvalueCompleteDict = {
+  ObjArray_or_string: _ => ([
+    `${_}:`,
+    {data:`${_}:""`, cursorOffset:-1},
+    {data:`${_}://`, cursorOffset:-1},
+    {data:`${_}:{}`, cursorOffset:-1},
+    {data:`${_}:[]`, cursorOffset:-1},
+  ]),
+  String: _ => ([
+    {data:`${_}:""`, cursorOffset:-1},
+  ]),
+  number: _ => ([
+    `${_}:`,
+  ]),
+  date: _ => ([
+    {data:`${_}:""`, cursorOffset:-1},
+  ]),
+  array: _ => ([
+    {data:`${_}:[]`, cursorOffset:-1},
+  ]),
+  object: _ => ([
+    {data:`${_}:{}`, cursorOffset:-1},
+  ]),
+  expr: _ => ([
+    {data:`${_}:{}`, cursorOffset:-1},
+  ]),
+  Expr: _ => ([
+    {data:`${_}:{}`, cursorOffset:-1},
+  ]),
+  string: _ => ([
+    `${_}:`,
+    {data:`${_}:""`, cursorOffset:-1},
+    {data:`${_}://`, cursorOffset:-1},
+    {data:`${_}:{}`, cursorOffset:-1},
+  ]),
+}
+function keyMatch(output, key, structs) {
+  let fullkeys = output.map(_ => _.data).flat()
+  if (!fullkeys.includes(key)) return // do nothing for output
+  let index = output.findIndex(_ => _.data.includes(key))
+  let item
+  if (index!==0) {
+    item = output.splice(index,1)
+    output.splice(0,0,item)
+  }
+  let tail = item.data.filter(_ => _!==key)
+  let struct = structs.find(_ => Object.keys(_.fields).includes(key))
+
+  let thisarray = struct.array
+  let thistype = stryct.type
+  thistype = thisarray?'array':thistype
+  let head = keyvalueCompleteDict[thistype](key)
+  item.data = [..head, ...tail]
+}
 function getPath(type, stack, cursor, extract) {
   let path = []
   let rawpath = []
@@ -1530,8 +1622,14 @@ Parser.prototype.autocomplete = function (input) {
           // e.g., title: {}
           let data = OPDict[struct.type]
           if (data.includes(thiskey)) { // delete old term '<key>', add '<key>:'
+            let thisarray = OPObjDict[struct.type].fields[thiskey].array
+            let thistype = OPObjDict[struct.type].fields[thiskey].type
+            thistype = thisarray?'array':thistype
             data = data.filter(_ => _!==thiskey)
-            data = [`${thiskey}:`, ...data]
+            data = [
+              ...keyvalueCompleteDict[thistype](thiskey),
+              ...data,
+            ]
           }
           output.push({
             group: `${struct.type} ops`,
@@ -1543,11 +1641,8 @@ Parser.prototype.autocomplete = function (input) {
           if (fields.includes(thiskey)) { // exactly match a field
             let matchArray = []
             if (struct) {
-              if (struct.fields&&struct.fields[thiskey]&&struct.fields[thiskey].type==='date') {
-                matchArray.push({
-                  data: `${thiskey}:""`,
-                  cursorOffset: -1,
-                })
+              if (struct.fields&&struct.fields[thiskey]) {
+                matchArray = keyvalueCompleteDict[struct.fields[thiskey].type](thiskey)
               } else {
                 matchArray.push( `${thiskey}:` )
               }
@@ -1615,11 +1710,17 @@ Parser.prototype.autocomplete = function (input) {
           ]
           if (data0.includes(thiskey)) {
             data0 = data0.filter(_ => _!==thiskey)
-            data0 = [`${thiskey}:`, ...data0]
+            data0 = [
+              ...keyvalueCompleteDict[struct.type](thiskey),
+              ...data0,
+            ]
             toPush[0].data = data0
           } else if (data1.includes(thiskey)) {
             data1 = data1.filter(_ => _!==thiskey)
-            data1 = [`${thiskey}:`, ...data1]
+            data1 = [
+              ...keyvalueCompleteDict[struct.type](thiskey),
+              ...data1,
+            ]
             toPush[1].data = data1
             toPush.reverse()
           }
@@ -1647,7 +1748,13 @@ Parser.prototype.autocomplete = function (input) {
           ops = ops.filter(_ => _.startsWith('$')).map(_ => _.slice(1))
           if (ops.includes(thiskey)) {
             ops = ops.filter(_ => _!==thiskey)
-            ops = [`${thiskey}:`, ...ops]
+            let thisarray = OPObjDict[optype].fields[`\$${thiskey}`].array
+            let thistype  = OPObjDict[optype].fields[`\$${thiskey}`].type
+            thistype = thisarray?'array':thistype
+            ops = [
+              ...keyvalueCompleteDict[thistype](thiskey),
+              ...ops,
+            ]
           }
           output.push({
             group: `${optype} ops`,
@@ -1668,11 +1775,17 @@ Parser.prototype.autocomplete = function (input) {
           ]
           if (data0.includes(thiskey)) {
             data0 = data0.filter(_ => _!==thiskey)
-            data0 = [`${thiskey}:`, ...data0]
+            data0 = [
+              ...keyvalueCompleteDict[optype](thiskey),
+              ...data0,
+            ]
             toPush[0].data = data0
           } else if (data1.includes(thiskey)) {
             data1 = data1.filter(_ => _!==thiskey)
-            data1 = [`${thiskey}:`, ...data1]
+            data1 = [
+              ...keyvalueCompleteDict[optype](thiskey),
+              ...data1,
+            ]
             toPush[1].data = data1
             toPush.reverse()
           }
@@ -1691,11 +1804,15 @@ Parser.prototype.autocomplete = function (input) {
       result.valueType = 'key_op'
     } else if (subtype === 'Key') { // do not complete for complete keys
       result.valueType = 'key_pair'
+      let len = extract.length
+      let thiskey = extract[len-1]
+      result.string = thiskey
     }
     if (subtype === 'ValueBlock' && inLastAnd) {
       result.valueType = 'key_value'
     }
   } else if (type === 'value') {
+    result.string = extract
     result.type = 'value'
     if (field) {
       result.completeType = field.type
@@ -1707,6 +1824,12 @@ Parser.prototype.autocomplete = function (input) {
       result.valueType = null
     }
     if (subtype === 'pairValueNull') {
+      if (struct) {
+        let thisarray = struct.array
+        let thistype = struct.type
+        thistype = thisarray?'array':thistype
+        output.push(valueCompleteDict[thistype]())
+      }
     } else {
     }
   }

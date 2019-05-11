@@ -410,10 +410,11 @@ let testData = {
     title: {$gt} ||
     title: {$gt:} ||
     title: {$gt:'123'} ||
-    title: {$gt:'123', $l} ||
-    title: {$gt:'123', $lt} ||
-    title: {$gt:'123', $lt:} ||
-    title: {$gt:'123', $lt:foo} ||
+    title: {$gt:'123', $i} ||
+    title: {$gt:'123', $in} ||
+    title: {$gt:'123', $in:} ||
+    title: {$gt:'123', $in:[]} ||
+    title: {$gt:'123', $in:[1,2]} ||
     title|  ||
     title|l  ||
     title|lt  ||
