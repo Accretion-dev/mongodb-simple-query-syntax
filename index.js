@@ -56,6 +56,14 @@ const OP_ROOT = {
     }
   }
 }
+let OP_logical = _ =>({
+  description: 'operation for logical',
+  fields: {
+    $and: { description: 'and', type: 'anyway', array: true, },
+    $or:  { description: 'or',  type: 'anyway', array: true, },
+  }
+})
+
 const OP_string = {
   description: 'operations for string',
   type: 'string',
@@ -172,6 +180,8 @@ const OPObjDict = {
   expr: OP_expr,
   Expr: OP_expr,
   date: OP_date,
+  array_object: OP_array_object,
+  global: OP_global,
 }
 /*
 TODO:
@@ -1438,23 +1448,36 @@ const keyvalueCompleteDict = {
     {data:`${_}:{}`, cursorOffset:-1},
   ]),
 }
+function opSimpleStruct(struct) {
+  struct = Object.assign({}, struct)
+  let fields = Object.keys(struct.fields)
+  let newfields = {}
+  fields.forEach(key=>{ newfields[key.slice(1)] = struct.fields[key] })
+  struct.fields = newfields
+  return struct
+}
 function keyMatch(output, key, structs) {
   let fullkeys = output.map(_ => _.data).flat()
   if (!fullkeys.includes(key)) return // do nothing for output
   let index = output.findIndex(_ => _.data.includes(key))
   let item
   if (index!==0) {
-    item = output.splice(index,1)
+    item = output.splice(index,1)[0]
     output.splice(0,0,item)
+  } else {
+    item = output[0]
   }
   let tail = item.data.filter(_ => _!==key)
   let struct = structs.find(_ => Object.keys(_.fields).includes(key))
 
-  let thisarray = struct.array
-  let thistype = stryct.type
+  let thisarray = struct.fields[key].array
+  let thistype  = struct.fields[key].type
   thistype = thisarray?'array':thistype
   let head = keyvalueCompleteDict[thistype](key)
-  item.data = [..head, ...tail]
+  if (item.group === 'fields') {
+    head.push(`${key}|`)
+  }
+  item.data = [...head, ...tail]
 }
 function getPath(type, stack, cursor, extract) {
   let path = []
@@ -1621,52 +1644,19 @@ Parser.prototype.autocomplete = function (input) {
         if (!['ObjArray_or_string', 'object'].includes(struct.type) && subtype==="objectKey") {
           // e.g., title: {}
           let data = OPDict[struct.type]
-          if (data.includes(thiskey)) { // delete old term '<key>', add '<key>:'
-            let thisarray = OPObjDict[struct.type].fields[thiskey].array
-            let thistype = OPObjDict[struct.type].fields[thiskey].type
-            thistype = thisarray?'array':thistype
-            data = data.filter(_ => _!==thiskey)
-            data = [
-              ...keyvalueCompleteDict[thistype](thiskey),
-              ...data,
-            ]
-          }
           output.push({
             group: `${struct.type} ops`,
             data,
           })
+          keyMatch(output, thiskey, [OPObjDict[struct.type]])
         } else if (struct.type !== 'ObjArray_or_string' || ['KeyKey', 'KeyOP', 'fieldKey'].includes(subtype)) {
           let fields = Object.keys(root.fields)
-          console.log({thiskey, fields})
-          if (fields.includes(thiskey)) { // exactly match a field
-            let matchArray = []
-            if (struct) {
-              if (struct.fields&&struct.fields[thiskey]) {
-                matchArray = keyvalueCompleteDict[struct.fields[thiskey].type](thiskey)
-              } else {
-                matchArray.push( `${thiskey}:` )
-              }
-              matchArray.push( `${thiskey}|` )
-            } else {
-              matchArray.push({
-                data: `${thiskey}:`
-              })
-            }
-            output.push({
-              data: matchArray
-            })
-            output.push({
-              group: 'fields',
-              description: 'fields of a model',
-              data: fields.filter(_ => _!==thiskey)
-            })
-          } else { // not exactly match a field
-            output.push({
-              group: 'fields',
-              description: 'fields of a model',
-              data: fields
-            })
-          }
+          let structs = [root]
+          output.push({
+            group: 'fields',
+            description: 'fields of a model',
+            data: fields
+          })
           if (isTop || isSubTop) {
             if (isTop) {
               if (inLastAnd) {
@@ -1686,45 +1676,31 @@ Parser.prototype.autocomplete = function (input) {
                 group: 'logical ops',
                 data: OPDict.logical
               })
+              structs.push(OP_ROOT)
             } else if (isSubTop) {
               output.push({
                 group: 'logical ops',
                 data: OPDict.logical
               })
             }
+            structs.push(OP_logical)
           }
+          keyMatch(output, thiskey, structs)
         } else if (subtype === 'arrayValue') {
           debugger
         } else { // tags: {}, struct type is 'ObjArray_or_string'
-          let data0 = OPDict.String
-          let data1 = OPDict.array_object
-          let toPush = [
+          output = output.concat([
             {
               group: `short as ${path[path.length-1]}.${root.primary_key}`,
-              data: data0,
+              data: OPDict.String,
             },
             {
               group: `${path[path.length-1]} object ops`,
-              data: data1,
+              data: OPDict.array_object,
             }
-          ]
-          if (data0.includes(thiskey)) {
-            data0 = data0.filter(_ => _!==thiskey)
-            data0 = [
-              ...keyvalueCompleteDict[struct.type](thiskey),
-              ...data0,
-            ]
-            toPush[0].data = data0
-          } else if (data1.includes(thiskey)) {
-            data1 = data1.filter(_ => _!==thiskey)
-            data1 = [
-              ...keyvalueCompleteDict[struct.type](thiskey),
-              ...data1,
-            ]
-            toPush[1].data = data1
-            toPush.reverse()
-          }
-          output = output.concat(toPush)
+          ])
+          let structs = [OP_string, OP_array_object]
+          keyMatch(output, thiskey, structs)
         }
       } else { // unknown (struct and root)
         output.push({
@@ -1741,60 +1717,35 @@ Parser.prototype.autocomplete = function (input) {
       let len = extract.length
       let thiskey = extract[len-1]
       result.string = thiskey
+      let structs = []
       if (struct) {
         let optype = struct.type
         let ops = OPDict[optype]
         if (ops.length>0) { // title|
           ops = ops.filter(_ => _.startsWith('$')).map(_ => _.slice(1))
-          if (ops.includes(thiskey)) {
-            ops = ops.filter(_ => _!==thiskey)
-            let thisarray = OPObjDict[optype].fields[`\$${thiskey}`].array
-            let thistype  = OPObjDict[optype].fields[`\$${thiskey}`].type
-            thistype = thisarray?'array':thistype
-            ops = [
-              ...keyvalueCompleteDict[thistype](thiskey),
-              ...ops,
-            ]
-          }
           output.push({
             group: `${optype} ops`,
             data:ops,
           })
+          structs.push( opSimpleStruct(OPObjDict[optype]) )
         } else if (optype === 'ObjArray_or_string') { // tags|
-          let data0 = OPDict.String.map(_ => _.slice(1))
-          let data1 = OPDict.array_object.map(_ => _.slice(1))
-          let toPush = [
-            {
+          output.push({
               group: `short as ${path[path.length-1]}.${root.primary_key}`,
-              data: data0,
-            },
-            {
+              data: OPDict.String.map(_ => _.slice(1)),
+          })
+          output.push({
               group: `${path[path.length-1]} object ops`,
-              data: data1,
-            }
-          ]
-          if (data0.includes(thiskey)) {
-            data0 = data0.filter(_ => _!==thiskey)
-            data0 = [
-              ...keyvalueCompleteDict[optype](thiskey),
-              ...data0,
-            ]
-            toPush[0].data = data0
-          } else if (data1.includes(thiskey)) {
-            data1 = data1.filter(_ => _!==thiskey)
-            data1 = [
-              ...keyvalueCompleteDict[optype](thiskey),
-              ...data1,
-            ]
-            toPush[1].data = data1
-            toPush.reverse()
-          }
-          output = output.concat(toPush)
+              data: OPDict.array_object.map(_ => _.slice(1)),
+          })
+          structs.push( opSimpleStruct(OPObjDict.String) )
+          structs.push( opSimpleStruct(OPObjDict.array_object) )
         }
         output.push({
           group: `global ops`,
           data: OPDict.global.map(_ => _.slice(1)),
         })
+        structs.push( opSimpleStruct(OPObjDict.global) )
+        keyMatch(output, thiskey, structs)
       } else {
         output.push({
           group: `unknown operations`,
@@ -1828,7 +1779,11 @@ Parser.prototype.autocomplete = function (input) {
         let thisarray = struct.array
         let thistype = struct.type
         thistype = thisarray?'array':thistype
-        output.push(valueCompleteDict[thistype]())
+        console.log({thistype})
+        let item = valueCompleteDict[thistype] && valueCompleteDict[thistype]()
+        if (item !== null) {
+          output.push(item)
+        }
       }
     } else {
     }
