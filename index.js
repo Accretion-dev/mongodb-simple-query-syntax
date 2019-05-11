@@ -153,7 +153,9 @@ const OPDict = {
   root: ['$expr','$where'],
   root_full: ['$expr','$where','$text','$unwind','$addFields'],
   ObjArray_or_string: [],
+  fields: [],
   expr: Object.keys(OP_expr.fields),
+  Expr: Object.keys(OP_expr.fields),
   string: Object.keys(OP_string.fields),
   String: Object.keys(OP_string.fields),
   number: Object.keys(OP_number.fields),
@@ -1323,7 +1325,45 @@ Parser.prototype.compile = function (input, parent, key, path, level, state) {
     return {result  , error}
   }
 }
-
+const testAutoComplete = [
+  `title: haha`,
+  `title: 'hehe'`,
+  `title: {$gt:'123', $lt:foo}`,
+  `title|lt: foo`,
+  `title|in:[foo,"haha hehe"]`,
+  `title: [123]`,
+  `ctime: "2018"`,
+  `ctime|lt: "2018"`,
+  `ctime: {$gt:'2018', $lt:"2018"}`,
+  `ctime: [foo,bar]`,
+  `flags|exists: true`,
+  `flags:{debug: true}`,
+  `flags.debug: true`,
+  `flags.count|gt: 10`,
+  `flags.count|in: [10, 20,]`,
+  `tag:{unexists:1}`,
+  `tags: foo`,
+  `tags: /foo/`,
+  `tags:{$in:[good,/123/], $el:{tag_name|in:[foo, bar], $and:[ctime|gt:'2018', tag_id|gt:10]}}`,
+  `tags: [foo, bar]`,
+  `tags|len: 5`,
+  `tags|len|gt: 5`,
+  `tags|len: {$gt:5, $lt:10}`,
+  `tags|lt: foo`,
+  `tags|in: [foo, bar]`,
+  `tags|el: {tag_id: 10, tag_name|in:[foo, bar], $and:[ctime|gt:'2018', tag_id|gt:10]}}`,
+  `tags|el|or: [tag_id: 10, tag_name|in:[foo, bar], $and:[ctime|gt:'2018', tag_id|gt:10]}]`,
+  `metadatas: [foo, bar]`,
+  `metadatas|in: [foo, bar]`,
+  `metadatas.metadata_name|in: [foo, bar]`,
+  `$and:[$or: [ tags: foo, tags: /foo/, ], $or: [ tags|lt: foo, tags|in: [foo, bar], ] ]`,
+  `$where: "blablabla"`,
+  `$text: {$search: good}`,
+  `$text|$search: "good"`,
+  `$expr:{$and:[$gt:["$title", "good"]]}`,
+  `$expr|and:[$or:[$lt:[$hour:"$ctime", 10]], $eq:["$title", /foo/]]`,
+  'last "search template" -gg',
+]
 function getPath(type, stack, cursor, extract) {
   let path = []
   let rawpath = []
@@ -1457,7 +1497,7 @@ Parser.prototype.autocomplete = function (input) {
   //if (!this.struct) return {type:null}
   let output = []
   let result = {
-    type:null, complete, valueType:null, completeType: null, completeField: null ,extract, path, rawpath, start, lastEnd, cursor, end, output
+    type:null, complete, valueType:null, completeField: null, string:null, completeType: null, extract, path, rawpath, start, lastEnd, cursor, end, output
   }
 
   console.log({structPath, isTop, isSubTop, isKey})
@@ -1483,15 +1523,21 @@ Parser.prototype.autocomplete = function (input) {
         // when subtype is key, thiskey is a array and will not match, as expected
         thiskey = extract
       }
+      result.string = thiskey
 
       if (struct&&root&&'fields' in root) { // known struct and root
-        //if (struct.type !== 'ObjArray_or_string' && subtype==="objectKey") {
-        //  output.push({
-        //    group: `${path[path.length-1]} object ops`,
-        //    data: OPDict[struct.type],
-        //  })
-        //} else 
-        if (struct.type !== 'ObjArray_or_string' || ['KeyKey', 'KeyOP', 'fieldKey'].includes(subtype)) {
+        if (!['ObjArray_or_string', 'object'].includes(struct.type) && subtype==="objectKey") {
+          // e.g., title: {}
+          let data = OPDict[struct.type]
+          if (data.includes(thiskey)) { // delete old term '<key>', add '<key>:'
+            data = data.filter(_ => _!==thiskey)
+            data = [`${thiskey}:`, ...data]
+          }
+          output.push({
+            group: `${struct.type} ops`,
+            data,
+          })
+        } else if (struct.type !== 'ObjArray_or_string' || ['KeyKey', 'KeyOP', 'fieldKey'].includes(subtype)) {
           let fields = Object.keys(root.fields)
           console.log({thiskey, fields})
           if (fields.includes(thiskey)) { // exactly match a field
@@ -1554,44 +1600,83 @@ Parser.prototype.autocomplete = function (input) {
           }
         } else if (subtype === 'arrayValue') {
           debugger
-        } else {
-          output.push({
-            group: `short as ${path[path.length-1]}.${root.primary_key}`,
-            data: OPDict.String,
-          })
-          output.push({
-            group: `${path[path.length-1]} object ops`,
-            data: OPDict.array_object,
-          })
+        } else { // tags: {}, struct type is 'ObjArray_or_string'
+          let data0 = OPDict.String
+          let data1 = OPDict.array_object
+          let toPush = [
+            {
+              group: `short as ${path[path.length-1]}.${root.primary_key}`,
+              data: data0,
+            },
+            {
+              group: `${path[path.length-1]} object ops`,
+              data: data1,
+            }
+          ]
+          if (data0.includes(thiskey)) {
+            data0 = data0.filter(_ => _!==thiskey)
+            data0 = [`${thiskey}:`, ...data0]
+            toPush[0].data = data0
+          } else if (data1.includes(thiskey)) {
+            data1 = data1.filter(_ => _!==thiskey)
+            data1 = [`${thiskey}:`, ...data1]
+            toPush[1].data = data1
+            toPush.reverse()
+          }
+          output = output.concat(toPush)
         }
       } else { // unknown (struct and root)
         output.push({
           group: `${rawpath.join('.')}.?`,
           always: true,
         })
+        output.push({
+          group: `global ops`,
+          data: OPDict.global,
+        })
       }
       result.valueType = 'key_only'
-    } else if (subtype === 'KeyOP') { // subtype is KeyOP and len(extract) > 1
+    } else if (subtype === 'KeyOP') { //
       let len = extract.length
       let thiskey = extract[len-1]
+      result.string = thiskey
       if (struct) {
         let optype = struct.type
         let ops = OPDict[optype]
-        if (ops.length>0) {
+        if (ops.length>0) { // title|
           ops = ops.filter(_ => _.startsWith('$')).map(_ => _.slice(1))
+          if (ops.includes(thiskey)) {
+            ops = ops.filter(_ => _!==thiskey)
+            ops = [`${thiskey}:`, ...ops]
+          }
           output.push({
             group: `${optype} ops`,
             data:ops,
           })
-        } else if (optype === 'ObjArray_or_string') {
-          output.push({
-            group: `short as ${path[path.length-1]}.${root.primary_key}`,
-            data: OPDict.String.map(_ => _.slice(1)),
-          })
-          output.push({
-            group: `${path[path.length-1]} object ops`,
-            data: OPDict.array_object.map(_ => _.slice(1)),
-          })
+        } else if (optype === 'ObjArray_or_string') { // tags|
+          let data0 = OPDict.String.map(_ => _.slice(1))
+          let data1 = OPDict.array_object.map(_ => _.slice(1))
+          let toPush = [
+            {
+              group: `short as ${path[path.length-1]}.${root.primary_key}`,
+              data: data0,
+            },
+            {
+              group: `${path[path.length-1]} object ops`,
+              data: data1,
+            }
+          ]
+          if (data0.includes(thiskey)) {
+            data0 = data0.filter(_ => _!==thiskey)
+            data0 = [`${thiskey}:`, ...data0]
+            toPush[0].data = data0
+          } else if (data1.includes(thiskey)) {
+            data1 = data1.filter(_ => _!==thiskey)
+            data1 = [`${thiskey}:`, ...data1]
+            toPush[1].data = data1
+            toPush.reverse()
+          }
+          output = output.concat(toPush)
         }
         output.push({
           group: `global ops`,

@@ -400,151 +400,294 @@ let testData = {
   },
   incomplete: {
     content:`
-      ta ||
-      title:    ||
-      title:{}  ||
-      title:{$g}  ||
-      title:{$gt}  ||
-      title:{$gt:}  ||
-      title:{$gt:"123"}  ||
-      title:{$gt:"123",l}  ||
-      title:{$gt:"123",$lt}  ||
-      title:{$gt:"123",$lt:}  ||
-      title:{$gt:"123",$lt:"456"}  ||
-      ctime     ||
-      ctime|    ||
-      ctime|l   ||
-      comment   ||
-      comment|  ||
-      comment|l ||
-      comment:  ||
-      flags     ||
-      flags.    ||
-      flags.g   ||
-      flags:    ||
-      flags|    ||
-      flags|l   ||
-      tags             ||
-      tags:            ||
-      tags.fla         ||
-      tags.flags       ||
-      tags.flags|      ||
-      tags.flags|l     ||
-      tags.flags:      ||
-      tags.flags.      ||
-      tags.flags.good  ||
-      tags.flags.good: ||
-      tags.ctime       ||
-      tags.ctime|      ||
-      tags.ctime|l     ||
-      tags.ctime:      ||
-      tags.ctime.      ||
-      tag: {}          ||
-      tag: {un}        ||
-      tag: {unexists  }||
-      tag: {unexists:1}||
-      tags: /good/     ||
-      tags: {}         ||
-      tags: {i}        ||
-      tags: {$in}      ||
-      tags: {$in:}     ||
-      $and: [
-        $or:[
-          tag,
-          tags,
-          tags:,
-        ],
-        $or:[
-          tags|,
-          tags|i,
-          tags|in,
-          tags|in:,
-          tags|in:[],
-        ],
-        tags.,
-        tags.ta,
-        tags.tag_name,
-        tags.tag_name:,
-        tags.tag_name:"good",
-        tags.tag_name|,
-        tags.tag_name|i,
-        tags.tag_name|in,
-        tags.tag_name|in:,
-        tags.tag_name|in:[],
-        tags.tag_name|in:['good'],
-      ] ||
-      tags: []         ||
-      tags: [123, 234] ||
-      tags: {$in:[]}   ||
-      tags: {$in:['123','456']}   ||
-      tags|                     ||
-      tags|e                    ||
-      tags|el                   ||
-      tags|el:                  ||
-      tags|el:{}                ||
-      tags|el: {tag}            ||
-      tags|el: {tag_name}       ||
-      tags|el: {tag_name:}      ||
-      tags|el: {tag_name|}      ||
-      tags|el: {tag_name|i}     ||
-      tags|el: {tag_name|in}    ||
-      tags|el: {tag_name|in:}   ||
-      tags|el: {tag_name|in:[]} ||
-      tags|el: {tag_name|in:[233]} ||
-      tags|el: {tag_name|in:[233], ctim} ||
-      tags|el: {tag_name|in:[233], ctime} ||
-      tags|el: {tag_name|in:[233], ctime:} ||
-      tags|el: {tag_name|in:[233], ctime|} ||
-      tags|el: {tag_name|in:[233], ctime|g} ||
-      tags|el: {tag_name|in:[233], ctime|gt} ||
-      tags|el: {tag_name|in:[233], ctime|gt:} ||
-      tags|el: {tag_name|in:[233], ctime|gt:""} ||
-      tags|el: {tag_name|in:[233], ctime|gt:"2018"} ||
-      tags|el: {
-        $and: [
-          tag_nam,
-          tag_name,
-          tag_name:,
-          tag_name|,
-          tag_name|i,
-          tag_name|in,
-          tag_name|in:,
-          tag_name|in:[],
-          tag_name|in:[233],
-        ]
-      } ||
-      tags|el|or: [
-        $and: [
-          tag_nam,
-          tag_name,
-          tag_name:,
-          tag_name|,
-          tag_name|i,
-          tag_name|in,
-          tag_name|in:,
-          tag_name|in:[],
-          tag_name|in:[233],
-        ],
-        $and: [
-          ctim,
-          ctime,
-          ctime:,
-          ctime:'2009',
-          ctime|,
-          ctime|g,
-          ctime|gt,
-          ctime|gt:,
-          ctime|gt:"",
-          ctime|gt:"2018",
-        ]
-      ] ||
-      metadatas        ||
-      metadatas|       ||
-      metadatas|i      ||
-      metadatas|in     ||
-      metadatas|in:    ||
-
-      last:good
+    titl ||
+    title ||
+    title: ||
+    title: haha ||
+    title: 'hehe' ||
+    title: {} ||
+    title: {$g} ||
+    title: {$gt} ||
+    title: {$gt:} ||
+    title: {$gt:'123'} ||
+    title: {$gt:'123', $l} ||
+    title: {$gt:'123', $lt} ||
+    title: {$gt:'123', $lt:} ||
+    title: {$gt:'123', $lt:foo} ||
+    title|  ||
+    title|l  ||
+    title|lt  ||
+    title|lt:  ||
+    title|lt: foo  ||
+    title|in  ||
+    title|in:  ||
+    title|in: [foo,]  ||
+    title|in: [foo,"haha hehe"]  ||
+    title: [] ||
+    title: [123] ||
+    ctim ||
+    ctime ||
+    ctime: ||
+    ctime: "2018" ||
+    ctime| ||
+    ctime|l ||
+    ctime|lt ||
+    ctime|lt: ||
+    ctime|lt: "2018" ||
+    ctime: {} ||
+    ctime: {$g} ||
+    ctime: {$gt} ||
+    ctime: {$gt:} ||
+    ctime: {$gt:'2018'} ||
+    ctime: {$gt:'2018', $l} ||
+    ctime: {$gt:'2018', $lt} ||
+    ctime: {$gt:'2018', $lt:} ||
+    ctime: {$gt:'2018', $lt:'2018'} ||
+    ctime: [] ||
+    ctime: [foo,bar] ||
+    flag ||
+    flags ||
+    flags| ||
+    flags|exist ||
+    flags|exists ||
+    flags|exists: ||
+    flags|exists: true ||
+    flags: ||
+    flags: {} ||
+    flags: {debug} ||
+    flags: {debug:} ||
+    flags: {debug: true} ||
+    flags. ||
+    flags.debug ||
+    flags.debug: ||
+    flags.debug: true ||
+    flags.count| ||
+    flags.count|gt ||
+    flags.count|gt: ||
+    flags.count|gt: 10 ||
+    flags.count|in: [] ||
+    flags.count|in: [10, 20] ||
+    tag ||
+    tag: ||
+    tag:{} ||
+    tag:{unexists} ||
+    tag:{unexists:} ||
+    tag:{unexists:1} ||
+    tags ||
+    tags: ||
+    tags: foo ||
+    tags: /foo/ ||
+    tags: {} ||
+    tags: {$i} ||
+    tags: {$in} ||
+    tags: {$in:} ||
+    tags: {$in:[]} ||
+    tags: {$in:[good,/123/]} ||
+    tags: {$in:[good,/123/], $} ||
+    tags: {$in:[good,/123/], $el} ||
+    tags: {$in:[good,/123/], $el:} ||
+    tags: {$in:[good,/123/], $el:{}} ||
+    tags: {$in:[good,/123/], $el:{tag_nam}} ||
+    tags: {$in:[good,/123/], $el:{tag_name}} ||
+    tags: {$in:[good,/123/], $el:{tag_name|}} ||
+    tags: {$in:[good,/123/], $el:{tag_name|i}} ||
+    tags: {$in:[good,/123/], $el:{tag_name|in}} ||
+    tags: {$in:[good,/123/], $el:{tag_name|in:}} ||
+    tags: {$in:[good,/123/], $el:{tag_name|in:[]}} ||
+    tags: {$in:[good,/123/], $el:{tag_name|in:[foo, bar]}} ||
+    tags: {$in:[good,/123/], $el:{tag_name|in:[foo, bar], $and}} ||
+    tags: {$in:[good,/123/], $el:{tag_name|in:[foo, bar], $and:}} ||
+    tags: {$in:[good,/123/], $el:{tag_name|in:[foo, bar], $and:[]}} ||
+    tags: {$in:[good,/123/], $el:{tag_name|in:[foo, bar], $and:[ctim]}} ||
+    tags: {$in:[good,/123/], $el:{tag_name|in:[foo, bar], $and:[ctime]}} ||
+    tags: {$in:[good,/123/], $el:{tag_name|in:[foo, bar], $and:[ctime|]}} ||
+    tags: {$in:[good,/123/], $el:{tag_name|in:[foo, bar], $and:[ctime|gt]}} ||
+    tags: {$in:[good,/123/], $el:{tag_name|in:[foo, bar], $and:[ctime|gt:]}} ||
+    tags: {$in:[good,/123/], $el:{tag_name|in:[foo, bar], $and:[ctime|gt:'2018']}} ||
+    tags: {$in:[good,/123/], $el:{tag_name|in:[foo, bar], $and:[ctime|gt:'2018', tag_id]}} ||
+    tags: {$in:[good,/123/], $el:{tag_name|in:[foo, bar], $and:[ctime|gt:'2018', tag_id|]}} ||
+    tags: {$in:[good,/123/], $el:{tag_name|in:[foo, bar], $and:[ctime|gt:'2018', tag_id|gt]}} ||
+    tags: {$in:[good,/123/], $el:{tag_name|in:[foo, bar], $and:[ctime|gt:'2018', tag_id|gt:]}} ||
+    tags: {$in:[good,/123/], $el:{tag_name|in:[foo, bar], $and:[ctime|gt:'2018', tag_id|gt:10]}} ||
+    tags: [] ||
+    tags: [foo, bar] ||
+    tags|
+    tags|le ||
+    tags|len ||
+    tags|len: ||
+    tags|len: 5 ||
+    tags|len|gt ||
+    tags|len|gt: ||
+    tags|len|gt: 5 ||
+    tags|len: {} ||
+    tags|len: {$gt} ||
+    tags|len: {$gt:} ||
+    tags|len: {$gt:5, } ||
+    tags|len: {$gt:5, $lt} ||
+    tags|len: {$gt:5, $lt:} ||
+    tags|len: {$gt:5, $lt:10} ||
+    tags|lt ||
+    tags|lt: ||
+    tags|lt:foo ||
+    tags|in ||
+    tags|in: ||
+    tags|in: [] ||
+    tags|in: [foo, bar] ||
+    tags|el ||
+    tags|el: ||
+    tags|el: {} ||
+    tags|el: {tag_i} ||
+    tags|el: {tag_id} ||
+    tags|el: {tag_id:} ||
+    tags|el: {tag_id: 10} ||
+    tags|el: {tag_id: 10, tag_name} ||
+    tags|el: {tag_id: 10, tag_name|} ||
+    tags|el: {tag_id: 10, tag_name|i} ||
+    tags|el: {tag_id: 10, tag_name|in} ||
+    tags|el: {tag_id: 10, tag_name|in:} ||
+    tags|el: {tag_id: 10, tag_name|in:[]} ||
+    tags|el: {tag_id: 10, tag_name|in:[foo, bar]} ||
+    tags|el: {tag_id: 10, tag_name|in:[foo, bar], $and} ||
+    tags|el: {tag_id: 10, tag_name|in:[foo, bar], $and:} ||
+    tags|el: {tag_id: 10, tag_name|in:[foo, bar], $and:[]} ||
+    tags|el: {tag_id: 10, tag_name|in:[foo, bar], $and:[ctim]} ||
+    tags|el: {tag_id: 10, tag_name|in:[foo, bar], $and:[ctime]} ||
+    tags|el: {tag_id: 10, tag_name|in:[foo, bar], $and:[ctime|g]} ||
+    tags|el: {tag_id: 10, tag_name|in:[foo, bar], $and:[ctime|gt]} ||
+    tags|el: {tag_id: 10, tag_name|in:[foo, bar], $and:[ctime|gt:]} ||
+    tags|el: {tag_id: 10, tag_name|in:[foo, bar], $and:[ctime|gt:'2018']} ||
+    tags|el: {tag_id: 10, tag_name|in:[foo, bar], $and:[ctime|gt:'2018', tag_i]} ||
+    tags|el: {tag_id: 10, tag_name|in:[foo, bar], $and:[ctime|gt:'2018', tag_id]} ||
+    tags|el: {tag_id: 10, tag_name|in:[foo, bar], $and:[ctime|gt:'2018', tag_id|g]} ||
+    tags|el: {tag_id: 10, tag_name|in:[foo, bar], $and:[ctime|gt:'2018', tag_id|gt]} ||
+    tags|el: {tag_id: 10, tag_name|in:[foo, bar], $and:[ctime|gt:'2018', tag_id|gt:]} ||
+    tags|el: {tag_id: 10, tag_name|in:[foo, bar], $and:[ctime|gt:'2018', tag_id|gt:10]} ||
+    tags|el| ||
+    tags|el|o ||
+    tags|el|or ||
+    tags|el|or: ||
+    tags|el|or: [] ||
+    tags|el|or: [tag_i] ||
+    tags|el|or: [tag_id] ||
+    tags|el|or: [tag_id:] ||
+    tags|el|or: [tag_id: 10] ||
+    tags|el|or: [tag_id: 10, tag_name] ||
+    tags|el|or: [tag_id: 10, tag_name|] ||
+    tags|el|or: [tag_id: 10, tag_name|i] ||
+    tags|el|or: [tag_id: 10, tag_name|in] ||
+    tags|el|or: [tag_id: 10, tag_name|in:] ||
+    tags|el|or: [tag_id: 10, tag_name|in:[]] ||
+    tags|el|or: [tag_id: 10, tag_name|in:[foo, bar]] ||
+    tags|el|or: [tag_id: 10, tag_name|in:[foo, bar], $and] ||
+    tags|el|or: [tag_id: 10, tag_name|in:[foo, bar], $and:] ||
+    tags|el|or: [tag_id: 10, tag_name|in:[foo, bar], $and:[]] ||
+    tags|el|or: [tag_id: 10, tag_name|in:[foo, bar], $and:[ctim]] ||
+    tags|el|or: [tag_id: 10, tag_name|in:[foo, bar], $and:[ctime]] ||
+    tags|el|or: [tag_id: 10, tag_name|in:[foo, bar], $and:[ctime|g]] ||
+    tags|el|or: [tag_id: 10, tag_name|in:[foo, bar], $and:[ctime|gt]] ||
+    tags|el|or: [tag_id: 10, tag_name|in:[foo, bar], $and:[ctime|gt:]] ||
+    tags|el|or: [tag_id: 10, tag_name|in:[foo, bar], $and:[ctime|gt:'2018']] ||
+    tags|el|or: [tag_id: 10, tag_name|in:[foo, bar], $and:[ctime|gt:'2018', tag_i]] ||
+    tags|el|or: [tag_id: 10, tag_name|in:[foo, bar], $and:[ctime|gt:'2018', tag_id]] ||
+    tags|el|or: [tag_id: 10, tag_name|in:[foo, bar], $and:[ctime|gt:'2018', tag_id|g]] ||
+    tags|el|or: [tag_id: 10, tag_name|in:[foo, bar], $and:[ctime|gt:'2018', tag_id|gt]] ||
+    tags|el|or: [tag_id: 10, tag_name|in:[foo, bar], $and:[ctime|gt:'2018', tag_id|gt:]] ||
+    tags|el|or: [tag_id: 10, tag_name|in:[foo, bar], $and:[ctime|gt:'2018', tag_id|gt:10]] ||
+    metadatas ||
+    metadatas: ||
+    metadatas: [] ||
+    metadatas: [foo, bar] ||
+    metadatas| ||
+    metadatas|i ||
+    metadatas|in ||
+    metadatas|in: ||
+    metadatas|in: [] ||
+    metadatas|in: [foo, bar] ||
+    metadatas.
+    metadatas.metadata_na  ||
+    metadatas.metadata_name ||
+    metadatas.metadata_name: ||
+    metadatas.metadata_name: '123' ||
+    metadatas.metadata_name| ||
+    metadatas.metadata_name|i ||
+    metadatas.metadata_name|in ||
+    metadatas.metadata_name|in: ||
+    metadatas.metadata_name|in: [] ||
+    metadatas.metadata_name|in: [foo, bar] ||
+    $and ||
+    $and: ||
+    $and:[] ||
+    $and:[$or] ||
+    $and:[$or:] ||
+    $and:[$or:[]] ||
+    $and:[$or:[tags]] ||
+    $and:[$or:[tags:]] ||
+    $and:[$or:[tags: foo]] ||
+    $and:[$or:[tags: foo, tags: /foo/]] ||
+    $and:[$or:[tags: foo, tags: /foo/], $or:] ||
+    $and:[$or:[tags: foo, tags: /foo/], $or:[]] ||
+    $and:[$or:[tags: foo, tags: /foo/], $or:[tags]] ||
+    $and:[$or:[tags: foo, tags: /foo/], $or:[tags|]] ||
+    $and:[$or:[tags: foo, tags: /foo/], $or:[tags|lt]] ||
+    $and:[$or:[tags: foo, tags: /foo/], $or:[tags|lt:]] ||
+    $and:[$or:[tags: foo, tags: /foo/], $or:[tags|lt:foo]] ||
+    $and:[$or:[tags: foo, tags: /foo/], $or:[tags|lt:foo, tags|]] ||
+    $and:[$or:[tags: foo, tags: /foo/], $or:[tags|lt:foo, tags|in]] ||
+    $and:[$or:[tags: foo, tags: /foo/], $or:[tags|lt:foo, tags|in:]] ||
+    $and:[$or:[tags: foo, tags: /foo/], $or:[tags|lt:foo, tags|in:[]]] ||
+    $and:[$or:[tags: foo, tags: /foo/], $or:[tags|lt:foo, tags|in:[foo, bar]]] ||
+    $where ||
+    $where: ||
+    $where: "blablabla" ||
+    $text ||
+    $text: ||
+    $text: {} ||
+    $text: {$searc} ||
+    $text: {$search} ||
+    $text: {$search: } ||
+    $text: {$search: good} ||
+    $text| ||
+    $text|$sear ||
+    $text|$search ||
+    $text|$search: ||
+    $text|$search: "good" ||
+    $expr ||
+    $expr: ||
+    $expr:{} ||
+    $expr:{$an} ||
+    $expr:{$and} ||
+    $expr:{$and:} ||
+    $expr:{$and:[]} ||
+    $expr:{$and:[$g]} ||
+    $expr:{$and:[$gt]} ||
+    $expr:{$and:[$gt:]} ||
+    $expr:{$and:[$gt:[""]]} ||
+    $expr:{$and:[$gt:["$ti"]]} ||
+    $expr:{$and:[$gt:["$title"]]} ||
+    $expr:{$and:[$gt:["$title", good]]} ||
+    $expr| ||
+    $expr|an ||
+    $expr|and ||
+    $expr|and: ||
+    $expr|and: [] ||
+    $expr|and: [$or] ||
+    $expr|and: [$or:] ||
+    $expr|and: [$or:[]] ||
+    $expr|and: [$or:[$lt]] ||
+    $expr|and: [$or:[$lt:]] ||
+    $expr|and: [$or:[$lt:[$hou]]] ||
+    $expr|and: [$or:[$lt:[$hour]]] ||
+    $expr|and: [$or:[$lt:[$hour:]]] ||
+    $expr|and: [$or:[$lt:[$hour:""]]] ||
+    $expr|and: [$or:[$lt:[$hour:"$ctime"]]] ||
+    $expr|and: [$or:[$lt:[$hour:"$ctime",10]]] ||
+    $expr|and: [$or:[$lt:[$hour:"$ctime",10]],$eq] ||
+    $expr|and: [$or:[$lt:[$hour:"$ctime",10]],$eq:] ||
+    $expr|and: [$or:[$lt:[$hour:"$ctime",10]],$eq:[]] ||
+    $expr|and: [$or:[$lt:[$hour:"$ctime",10]],$eq:[""]] ||
+    $expr|and: [$or:[$lt:[$hour:"$ctime",10]],$eq:["$title"]] ||
+    $expr|and: [$or:[$lt:[$hour:"$ctime",10]],$eq:["$title", /foo/]] ||
+    last "search template" -gg
     `
   }
 }
