@@ -474,6 +474,14 @@ let testData = {
     tag:{unexists} ||
     tag:{unexists:} ||
     tag:{unexists:1} ||
+    tag:{$exists} ||
+    tag:{$exists:} ||
+    tag:{$exists:1} ||
+    tag| ||
+    tag|exist ||
+    tag|exists ||
+    tag|exists: ||
+    tag|exists: ture ||
     tags ||
     tags: ||
     tags: foo ||
@@ -517,6 +525,7 @@ let testData = {
     tags|len ||
     tags|len: ||
     tags|len: 5 ||
+    tags|len|   ||
     tags|len|gt ||
     tags|len|gt: ||
     tags|len|gt: 5 ||

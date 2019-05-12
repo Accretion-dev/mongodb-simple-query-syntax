@@ -56,13 +56,13 @@ const OP_ROOT = {
     }
   }
 }
-let OP_logical = _ =>({
+let OP_logical = {
   description: 'operation for logical',
   fields: {
     $and: { description: 'and', type: 'anyway', array: true, },
     $or:  { description: 'or',  type: 'anyway', array: true, },
   }
-})
+}
 
 const OP_string = {
   description: 'operations for string',
@@ -89,6 +89,10 @@ const OP_number = {
     $in: { description:'in', type: 'number', array: true },
     $nin: { description:'nin', type: 'number', array: true },
   }
+}
+const OP_boolean = {
+  description: 'operations for number',
+  type: 'boolean',
 }
 const OP_date = {
   description: 'operations for date',
@@ -176,12 +180,15 @@ const OPDict = {
 const OPObjDict = {
   string: OP_string,
   String: OP_string,
+  Boolean: OP_boolean,
   number: OP_number,
   expr: OP_expr,
   Expr: OP_expr,
   date: OP_date,
   array_object: OP_array_object,
   global: OP_global,
+  object: OP_global,
+  logical: OP_logical,
 }
 /*
 TODO:
@@ -1018,8 +1025,8 @@ function getTypeStruct(key, type) {
     return null
   } else if (type === 'number') {
     ops = OP_number
-  } else if (type === 'Bollean') {
-    return null
+  } else if (type === 'Boolean') {
+    return OP_boolean
   } else if (type === 'date') {
     ops = OP_date
   } else if (type === 'expr') {
@@ -1045,7 +1052,7 @@ function getSubStruct (key, current_struct, path, index, vtype) {
     current_struct =  current_struct.fields[key]
     if ('primary_key' in current_struct) { // e.g., tags:
       let nextPath = path[index+1]
-      console.log({nextPath, path})
+      // console.log({nextPath, path})
       // if not use syntax sugger (use tags as tags.tag_name), nextPath must be one of $el, $elemMatch or $len
       if (vtype==='value' || (vtype==='key' && nextPath !== undefined)) {
         if (nextPath!==undefined && (!nextPath.startsWith('$') || ["$el", "$elemMatch", "$len"].includes(nextPath))) { // e.g.: tags|el:
@@ -1065,7 +1072,11 @@ function getSubStruct (key, current_struct, path, index, vtype) {
         return OP_ROOT.fields[key]
       }
     }
-    if (array) {
+    if (key === '$exists') {
+      return OP_boolean
+    } else if (key === '$type') {
+      return OP_number
+    } else if (array) {
       if (key === '$len') {
         return OP_number
       }
@@ -1111,7 +1122,15 @@ function getStruct(struct, path, type) {
       }
       last_current_struct = current_struct
       current_struct = getSubStruct(each, current_struct, path, index, type)
-      if (!current_struct) { return {struct:null} } // can not parse struct
+      if (!current_struct) {
+        if (path[path.length-1] === '$exists') {
+          return {struct:OP_boolean,root:null, field:null}
+        } else if (path[path.length-1] === '$type') {
+          return {struct:OP_number,root:null, field:null}
+        } else {
+          return {struct:null}
+        }
+      } // can not parse struct
       if (current_struct.type === 'object' && current_struct.path !== 'metadatas.value') {
         current_root = current_struct
       } else if (current_struct.type === 'ObjArray_or_string') {
@@ -1359,6 +1378,8 @@ const testAutoComplete = [
   `flags.count|gt: 10`,
   `flags.count|in: [10, 20,]`,
   `tag:{unexists:1}`,
+  `tag:{$exists:true}`,
+  `tag|$exists:tru  e`,
   `tags: foo`,
   `tags: /foo/`,
   `tags:{$in:[good,/123/], $el:{tag_name|in:[foo, bar], $and:[ctime|gt:'2018', tag_id|gt:10]}}`,
@@ -1413,6 +1434,9 @@ const valueCompleteDict = {
   ]),
 }
 const keyvalueCompleteDict = {
+  Boolean: _ => ([
+    `${_}:`,
+  ]),
   ObjArray_or_string: _ => ([
     `${_}:`,
     {data:`${_}:""`, cursorOffset:-1},
@@ -1472,8 +1496,18 @@ function keyMatch(output, key, structs) {
 
   let thisarray = struct.fields[key].array
   let thistype  = struct.fields[key].type
-  thistype = thisarray?'array':thistype
-  let head = keyvalueCompleteDict[thistype](key)
+  let primary_key = struct.fields[key].primary_key
+  let head
+  if (!primary_key) {
+    thistype = thisarray?'array':thistype
+    head = keyvalueCompleteDict[thistype](key)
+  } else {
+    let ptype = struct.fields[key].fields[primary_key].type
+    head = [
+      ...keyvalueCompleteDict[ptype](key),
+      ...keyvalueCompleteDict.array(key),
+    ]
+  }
   if (item.group === 'fields') {
     head.push(`${key}|`)
   }
@@ -1607,7 +1641,8 @@ Parser.prototype.autocomplete = function (input) {
     struct ? {
       type: struct.type,
       array: struct.array,
-      root_fields:root.fields ? Object.keys(root.fields).join(','): null} : null,
+      root_fields: root ? (root.fields ? Object.keys(root.fields).join(',') : null): null
+    }: null,
   )
   //if (!this.struct) return {type:null}
   let output = []
@@ -1716,6 +1751,7 @@ Parser.prototype.autocomplete = function (input) {
     } else if (subtype === 'KeyOP') { //
       let len = extract.length
       let thiskey = extract[len-1]
+      let lastkey = extract[len-2]
       result.string = thiskey
       let structs = []
       if (struct) {
@@ -1739,6 +1775,14 @@ Parser.prototype.autocomplete = function (input) {
           })
           structs.push( opSimpleStruct(OPObjDict.String) )
           structs.push( opSimpleStruct(OPObjDict.array_object) )
+        } else if (lastkey === 'el') { // tags|el|or
+          ops = OPDict.logical
+          ops = ops.map(_ => _.slice(1))
+          output.push({
+            group: `$el ops`,
+            data:ops,
+          })
+          structs.push( opSimpleStruct(OPObjDict.logical) )
         }
         output.push({
           group: `global ops`,
@@ -1762,7 +1806,7 @@ Parser.prototype.autocomplete = function (input) {
     if (subtype === 'ValueBlock' && inLastAnd) {
       result.valueType = 'key_value'
     }
-  } else if (type === 'value') {
+  } else if (type === 'value') { // autocomplete value
     result.string = extract
     result.type = 'value'
     if (field) {
@@ -1775,17 +1819,31 @@ Parser.prototype.autocomplete = function (input) {
       result.valueType = null
     }
     if (subtype === 'pairValueNull') {
-      if (struct) {
+      let thiskey = path[path.length-1]
+      if (thiskey === '$el' || thiskey === '$elemMatch') {
+        output.push({
+          group: `type: object`,
+          data: valueCompleteDict.object(),
+        })
+      } else if (struct) {
         let thisarray = struct.array
         let thistype = struct.type
         thistype = thisarray?'array':thistype
-        console.log({thistype})
         let item = valueCompleteDict[thistype] && valueCompleteDict[thistype]()
         if (item !== null) {
-          output.push(item)
+          output.push({
+            group: `type: ${thistype}`,
+            data: item,
+          })
         }
       }
     } else {
+      if (struct) {
+        output.push({
+          group: `type: ${struct.type}`,
+          always: true
+        })
+      }
     }
   }
   console.log(JSON.stringify({extract, output},null,2))
