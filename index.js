@@ -7,24 +7,17 @@ const {DateTime} = require('luxon')
 
 // general operations
 const OP_expr = { // expr means Expr or fields or value
-  description:'expr', type:'Expr',
+  description:'expr', type:'expr', op: true,
   fields: {
-    $and: { description:"and", type:'Expr', array:true},
-    $or: { description:"or", type:'Expr', array:true},
-    $not: { description:"not", type:'Expr'},
-    $eq: { description:"==", type:'expr', array:true},
-    $lt: { description:"<", type:'expr', array:true},
-    $gt: { description:">", type:'expr', array:true},
-    $lte: { description:"<=", type:'expr', array:true},
-    $gte: { description:">=", type:'expr', array:true},
-    $ne: { description:"!=", type:'expr', array:true},
-    $cond: { description:"cond", type:'cond',
-      fields: {
-        if: { description:"if", type:'Expr'},
-        then: { description:"then", type:'Expr'},
-        else: { description:"else", type:'Expr'},
-      }
-    },
+    $and: { description:"and", type:'expr', array:true},
+    $or: { description:"or", type:'expr', array:true},
+    $not: { description:"not", type:'expr', array:true},
+    $eq: { description:"==",  type:'expr_op', array:true},
+    $lt: { description:"<",   type:'expr_op', array:true},
+    $gt: { description:">",   type:'expr_op', array:true},
+    $lte: { description:"<=", type:'expr_op', array:true},
+    $gte: { description:">=", type:'expr_op', array:true},
+    $ne: { description:"!=",  type:'expr_op', array:true},
     $abs: { description:"abs", type:'fields'},
     $hour: { description:"hour", type:'fields'},
     $minute: { description:"minute", type:'fields'},
@@ -33,51 +26,67 @@ const OP_expr = { // expr means Expr or fields or value
     $year: { description:"year", type:'fields'},
   }
 }
+const OP_expr_op = { // expr means Expr or fields or value
+  description:'expr', type:'expr_op', op: true,
+  fields: {
+    $abs: { description:"abs", type:'fields'},
+    $hour: { description:"hour", type:'fields'},
+    $minute: { description:"minute", type:'fields'},
+    $day: { description:"day", type:'fields'},
+    $month: { description:"month", type:'fields'},
+    $year: { description:"year", type:'fields'},
+  }
+}
+const OP_text = {
+  description: 'text', type: 'text', op: true,
+  fields: {
+    $search: {
+      description: 'search', type: 'String',
+    }
+  }
+}
 const OP_ROOT = {
+  op: true,
   description: 'operation for root level',
   fields: {
     $expr: OP_expr,
     $where: {
       description: 'where', type:'String',
     },
-    $text: {
-      description: 'text', type: 'object',
-      fields: {
-        $search: {
-          description: 'search', type: 'String',
-        }
-      }
-    },
+    $text: OP_text,
     $unwind: {
-      description: 'unwind', type: 'fields',
+      description: 'unwind', type: 'object',
     },
     $addFields: {
-      description: 'addFields', type: 'addFields'
+      description: 'addFields', type: 'object'
     }
   }
 }
 let OP_logical = {
+  op: true,
   description: 'operation for logical',
   fields: {
-    $and: { description: 'and', type: 'anyway', array: true, },
-    $or:  { description: 'or',  type: 'anyway', array: true, },
+    $and: { description: 'and', type: 'array', array: true, },
+    $or:  { description: 'or',  type: 'array', array: true, },
   }
 }
 
 const OP_string = {
+  op: true,
   description: 'operations for string',
   type: 'string',
   fields: {
+    $in: { description:'in', type: 'string', array: true },
+    $nin: { description:'nin', type: 'string', array: true },
     $lt: { description:"<", type:'String' },
     $gt: { description:">", type:'String' },
     $lte: { description:"<=", type:'String' },
     $gte: { description:">=", type:'String' },
     $ne: { description:"!=", type:'String' },
-    $in: { description:'in', type: 'string', array: true },
-    $nin: { description:'nin', type: 'string', array: true },
   }
 }
 const OP_number = {
+  op: true,
   description: 'operations for number',
   type: 'number',
   fields: {
@@ -91,10 +100,12 @@ const OP_number = {
   }
 }
 const OP_boolean = {
+  op: true,
   description: 'operations for number',
   type: 'boolean',
 }
 const OP_date = {
+  op: true,
   description: 'operations for date',
   type: 'date',
   fields: {
@@ -105,6 +116,7 @@ const OP_date = {
   }
 }
 const OP_global = {
+  op: true,
   description: 'operations for all fields',
   fields: {
     $exists: { description:'exists', type: 'Boolean' },
@@ -112,25 +124,27 @@ const OP_global = {
   }
 }
 const OP_array_object = {
+  op: true,
   description: 'operations for array_object',
   fields: {
+    $len: { description:'len', type: 'number' },
     $el: { description:'elemMatch', type: 'object' },
     $elemMatch: { description:'elemMatch', type: 'object' },
-    $len: { description:'len', type: 'number' },
   }
 }
 const OP_array = {
+  op: true,
   description: 'operations for date',
   fields: {
+    $in: { description:'in', type: 'unknown', array: true },
+    $nin: { description:'nin', type: 'unknown', array: true },
+    $el: { description:'elemMatch', type: 'object' },
+    $elemMatch: { description:'elemMatch', type: 'object' },
     $lt: { description:"<", type:'unknown' },
     $gt: { description:">", type:'unknown' },
     $lte: { description:"<=", type:'unknown' },
     $gte: { description:">=", type:'unknown' },
     $ne: { description:">=", type:'unknown' },
-    $in: { description:'in', type: 'unknown', array: true },
-    $nin: { description:'nin', type: 'unknown', array: true },
-    $el: { description:'elemMatch', type: 'object' },
-    $elemMatch: { description:'elemMatch', type: 'object' },
   }
 }
 const OP_array_number = JSON.parse(JSON.stringify(OP_array,
@@ -143,31 +157,34 @@ const OP_array_string = JSON.parse(JSON.stringify(OP_array,
   function (key, value) { if(key==='type' && value==='unknown') {return 'string'} else {return value} })
 )
 const OP_objarray_string_mixed = {
+  op: true,
   description: 'mix of ObjArray and string',
   type:'ObjArray_or_string',
   fields: {
+    $len: { description:'len', type: 'number' },
     $el: { description:'elemMatch', type: 'object' },
     $elemMatch: { description:'elemMatch', type: 'object' },
-    $len: { description:'len', type: 'number' },
+    $ne: { description:"!=", type:'String' },
+    $in: { description:'in', type: 'string', array: true },
+    $nin: { description:'nin', type: 'string', array: true },
     $lt: { description:"<", type:'String' },
     $gt: { description:">", type:'String' },
     $lte: { description:"<=", type:'String' },
     $gte: { description:">=", type:'String' },
-    $ne: { description:"!=", type:'String' },
-    $in: { description:'in', type: 'string', array: true },
-    $nin: { description:'nin', type: 'string', array: true },
   },
 }
 const OPDict = {
   global: Object.keys(OP_global.fields),
   logical: ['$and','$or'],
   object: [],
-  root: ['$expr','$where'],
+  //root: ['$expr','$where'],
+  root: ['$expr','$where','$text','$unwind','$addFields'],
   root_full: ['$expr','$where','$text','$unwind','$addFields'],
   ObjArray_or_string: [],
   fields: [],
+  text: Object.keys(OP_text.fields),
   expr: Object.keys(OP_expr.fields),
-  Expr: Object.keys(OP_expr.fields),
+  expr_op: Object.keys(OP_expr_op.fields),
   string: Object.keys(OP_string.fields),
   String: Object.keys(OP_string.fields),
   number: Object.keys(OP_number.fields),
@@ -183,7 +200,8 @@ const OPObjDict = {
   Boolean: OP_boolean,
   number: OP_number,
   expr: OP_expr,
-  Expr: OP_expr,
+  expr_op: OP_expr_op,
+  text: OP_text,
   date: OP_date,
   array_object: OP_array_object,
   global: OP_global,
@@ -457,7 +475,7 @@ Tracer.prototype.getAutocompleteType = function (cursor, log, detail, print) {
   let length = this.content.length
   if (cursor<0 || cursor > length) throw Error(`bad cursor position: should be within [0, ${length}]`)
 
-  let related = this.traceInfo.filter(_ => _.location.start.offset<=cursor && _.location.end.offset>=cursor && _.result)
+  let related = this.traceInfo.filter(_ => _.location.start.offset<=cursor && _.location.end.offset>=cursor && _.result!==null)
   let thisStruct = null
   let prefix, suffix
   let value
@@ -534,11 +552,6 @@ Tracer.prototype.getAutocompleteType = function (cursor, log, detail, print) {
       output = {type: 'value', subtype: 'arrayValue', complete: 'insert', rawtype: type, extract:"", start: cursor, end:cursor, stateStack}
       break
     } else if (type === 'ValueBlock') {
-      if (value.type === 'SimpleString') {
-        if (value.result.indexOf('.')>=0) {
-
-        }
-      }
       output = {
         type: 'key',
         subtype: type,
@@ -1030,15 +1043,13 @@ function getTypeStruct(key, type) {
   } else if (type === 'date') {
     ops = OP_date
   } else if (type === 'expr') {
-    ops = OP_expr
-  } else if (type === 'Expr') {
-    ops = OP_expr
-  } else if (type === 'addFields') {
-    return {description: 'addFields', type:'fieldObject'}
-  } else if (type === 'fieldObject') {
-    return {description: 'fieldObject', type:'fields'}
+    ops = OP_ROOT.fields.$expr
+  } else if (type === 'expr_op') {
+    ops = OP_expr_op
+  } else if (type === 'text') {
+    ops = OP_ROOT.fields.$text
   }
-  if (key in ops.fields) {
+  if (ops.fields && key in ops.fields) {
     return ops.fields[key]
   } else {
     return null
@@ -1048,22 +1059,23 @@ function getSubStruct (key, current_struct, path, index, vtype) {
   //console.log({key, current_struct, path, index})
   const levelKeys = ['$el', '$elemMatch', '$and', '$or', '$not']
   let {type, array} = current_struct
-  if (current_struct.fields && key in current_struct.fields) {
+  if (current_struct.fields && key in current_struct.fields) { // get current_struct in .fields
     current_struct =  current_struct.fields[key]
-    if ('primary_key' in current_struct) { // e.g., tags:
+    if ('primary_key' in current_struct) { // e.g., tags...
       let nextPath = path[index+1]
-      // console.log({nextPath, path})
       // if not use syntax sugger (use tags as tags.tag_name), nextPath must be one of $el, $elemMatch or $len
-      if (vtype==='value' || (vtype==='key' && nextPath !== undefined)) {
-        if (nextPath!==undefined && (!nextPath.startsWith('$') || ["$el", "$elemMatch", "$len"].includes(nextPath))) { // e.g.: tags|el:
+      if (vtype==='value' || (vtype==='key' && nextPath !== undefined)) { // tags: [v], tags:{v}
+        if (nextPath!==undefined && (!nextPath.startsWith('$') ||  // e.g.: tags.tag_name
+            ["$el", "$elemMatch", "$len"].includes(nextPath))) {   // e.g.: tags|el
+            // tags should be a array of object
           return current_struct
-        } else { // e.g.: tags: , tags|in:
+        } else { // e.g.: tags: , tags|in:, tags should be abbr of tags.tag_name
           return current_struct.fields[current_struct.primary_key]
         }
-      } else { // type is key and nextPath is undefined
+      } else { // type is key and nextPath is undefined, so the autoComplete should complete both
         return OP_objarray_string_mixed
       }
-    } else {
+    } else { // normal exists fields, like 'title', 'ctime'
       return current_struct
     }
   } else { // get current_struct based on type and array
@@ -1382,6 +1394,7 @@ const testAutoComplete = [
   `tag|$exists:tru  e`,
   `tags: foo`,
   `tags: /foo/`,
+  `tags.tag_name: /foo/`,
   `tags:{$in:[good,/123/], $el:{tag_name|in:[foo, bar], $and:[ctime|gt:'2018', tag_id|gt:10]}}`,
   `tags: [foo, bar]`,
   `tags|len: 5`,
@@ -1419,19 +1432,29 @@ const valueCompleteDict = {
     {data:`[]`, cursorOffset:-1},
   ]),
   object: _ => ([
-    {data:`{}`, cursorOffset:-1},
+    {data:`{}`, cursorOffset:-1, comment: 'object ops'},
   ]),
   expr: _ => ([
-    {data:`{}`, cursorOffset:-1},
+    {data:`{}`, cursorOffset:-1, comment: '$expr ops'},
   ]),
-  Expr: _ => ([
-    {data:`{}`, cursorOffset:-1},
+  text: _ => ([
+    {data:`{}`, cursorOffset:-1, comment: '$text ops'},
   ]),
-  string: _ => ([
-    {data:`""`, cursorOffset:-1},
-    {data:`//`, cursorOffset:-1},
-    {data:`{}`, cursorOffset:-1},
-  ]),
+  string: _ => {
+    if (!_) {
+      return [
+        {data:`""`, cursorOffset:-1, comment: 'string in quote'},
+        {data:`//`, cursorOffset:-1, comment: 'regexp'},
+        {data:`{}`, cursorOffset:-1, comment: 'string ops'},
+      ]
+    } else {
+      return [
+        {data:`""`, cursorOffset:-1, comment: `abbr of ${_}:""`},
+        {data:`//`, cursorOffset:-1, comment: `abbr of ${_}://`},
+        {data:`{}`, cursorOffset:-1, comment: `abbr of ${_}:{}`},
+      ]
+    }
+  },
 }
 const keyvalueCompleteDict = {
   Boolean: _ => ([
@@ -1451,26 +1474,40 @@ const keyvalueCompleteDict = {
     `${_}:`,
   ]),
   date: _ => ([
-    {data:`${_}:""`, cursorOffset:-1},
+    {data:`${_}:""`, cursorOffset:-1, comment: 'date filter'},
   ]),
-  array: _ => ([
-    {data:`${_}:[]`, cursorOffset:-1},
+  array: (_,comment) => ([
+    {data:`${_}:[]`, cursorOffset:-1, comment},
   ]),
   object: _ => ([
-    {data:`${_}:{}`, cursorOffset:-1},
+    {data:`${_}:{}`, cursorOffset:-1, comment: 'object ops'},
+  ]),
+  text: _ => ([
+    {data:`${_}:{}`, cursorOffset:-1, comment: '$text ops'},
+  ]),
+  fields: _ => ([
+    `${_}:`,
   ]),
   expr: _ => ([
-    {data:`${_}:{}`, cursorOffset:-1},
+    {data:`${_}:{}`, cursorOffset:-1, comment: '$expr ops'},
   ]),
-  Expr: _ => ([
-    {data:`${_}:{}`, cursorOffset:-1},
-  ]),
-  string: _ => ([
-    `${_}:`,
-    {data:`${_}:""`, cursorOffset:-1},
-    {data:`${_}://`, cursorOffset:-1},
-    {data:`${_}:{}`, cursorOffset:-1},
-  ]),
+  string: (_,primary_key) => {
+    if (primary_key) {
+      return [
+        `${_}:`,
+        {data:`${_}:""`, cursorOffset:-1, comment: `abbr of ${_}.${primary_key}:""`},
+        {data:`${_}://`, cursorOffset:-1, comment: `abbr of ${_}.${primary_key}://`},
+        {data:`${_}:{}`, cursorOffset:-1, comment: `abbr of ${_}.${primary_key}:{}`},
+      ]
+    } else {
+      return [
+        `${_}:`,
+        {data:`${_}:""`, cursorOffset:-1, comment: 'string in quote'},
+        {data:`${_}://`, cursorOffset:-1, comment: 'regexp'},
+        {data:`${_}:{}`, cursorOffset:-1, comment: 'string ops'},
+      ]
+    }
+  },
 }
 function opSimpleStruct(struct) {
   struct = Object.assign({}, struct)
@@ -1497,15 +1534,27 @@ function keyMatch(output, key, structs) {
   let thisarray = struct.fields[key].array
   let thistype  = struct.fields[key].type
   let primary_key = struct.fields[key].primary_key
-  let head
+  let isop      = struct.op
+  let head = []
   if (!primary_key) {
-    thistype = thisarray?'array':thistype
-    head = keyvalueCompleteDict[thistype](key)
-  } else {
+    if (isop) {
+      thistype = thisarray?'array':thistype
+      head = keyvalueCompleteDict[thistype] && keyvalueCompleteDict[thistype](key)
+    } else {
+      if (thistype === 'string' || thistype === 'number') {
+        head = [
+          ...keyvalueCompleteDict[thistype](key),
+          ...keyvalueCompleteDict.array(key, `abbr of ${key}|in:[]`), // add title:[] for abbr of 'title|in:[]'
+        ]
+      } else {
+        head = keyvalueCompleteDict[thistype](key)
+      }
+    }
+  } else { // tags
     let ptype = struct.fields[key].fields[primary_key].type
     head = [
-      ...keyvalueCompleteDict[ptype](key),
-      ...keyvalueCompleteDict.array(key),
+      ...keyvalueCompleteDict[ptype](key, primary_key),
+      ...keyvalueCompleteDict.array(key, `abbr of ${key}.${primary_key}|in:[]`),
     ]
   }
   if (item.group === 'fields') {
@@ -1599,16 +1648,32 @@ function getPath(type, stack, cursor, extract) {
   }
   return {path, rawpath}
 }
-// TODOs: autocomplete several values
+
+Parser.prototype.getAllSubFields = function () {
+  function deep(struct, father, array) {
+    for (let key in struct.fields) {
+      array.push(`"\$${father}${key}"`)
+      if ('fields' in struct.fields[key]) deep(struct.fields[key], `${father}${key}.`, array)
+    }
+  }
+  if (this.allSubFields) {
+    return this.allSubFields
+  } else {
+    this.allSubFields = []
+    deep(this.struct, '', this.allSubFields)
+    return this.allSubFields
+  }
+}
 Parser.prototype.autocomplete = function (input) {
   let {type, subtype, valueType, stateStack, extract, cursor, start, end, complete, lastEnd, rawtype} = input
   console.log('===================================================================================')
+  console.log(input)
   let path = []
   let rawpath = []
   if (!type) return {type: null} // not good cursor position for auto complete
   if (stateStack && subtype !== 'ValueBlock') {
     let stack = stateStack.filter(_ => !(['AND','OR', 'ANDArrayWrapper', 'ORArrayWrapper'].includes(_.type)))
-    console.log('stack:', stack)
+    // console.log('stack:', stack)
     __ = getPath(type, stack, cursor, extract)
     path = __.path
     rawpath = __.rawpath
@@ -1618,10 +1683,12 @@ Parser.prototype.autocomplete = function (input) {
   if (!this.struct) return {type:null, path} // do not do autocomplete without struct infomation
 
   let structPath = path.filter(_ => typeof(_)!=='number')
-  let isInSubTop = path.findIndex(_ => _==='$el' || _==='$elemMatch') > -1
-  let isSubTop = isInSubTop && ['$and', '$or', '$el', '$elemMatch'].includes(structPath[structPath.length-1])
-  let isTop = !isSubTop && (path.length === 0 || ['$and', '$or'].includes(structPath[structPath.length-1]))
-  let isKey = type === 'key' || (type==="value" && (subtype === 'arrayValue' && (isTop || isSubTop)))
+  let inExpr = path.findIndex(_ => _==='$expr') > -1
+  let inSubTop = !inExpr && path.findIndex(_ => _==='$el' || _==='$elemMatch') > -1
+  let isSubTop = inSubTop && ['$and', '$or', '$el', '$elemMatch'].includes(structPath[structPath.length-1])
+  let isTop = !inExpr && !isSubTop && (path.length === 0 || ['$and', '$or'].includes(structPath[structPath.length-1]))
+  let isKey = type === 'key' || (type==="value" && (subtype === 'arrayValue' && (isTop || isSubTop || inExpr)))
+  let inExprLike = path.findIndex(_ => _==='$unwind') > -1 || path.findIndex(_ => _==='$addFields') > -1
 
   let struct, root, field
   if (this.struct) {
@@ -1656,12 +1723,12 @@ Parser.prototype.autocomplete = function (input) {
     if (subtype === 'fieldKey' ||
         subtype === 'ValueBlock' ||
         subtype === 'objectKey' ||
-        (subtype === 'arrayValue' && (isTop || isSubTop)) ||
+        (subtype === 'arrayValue' && (isTop || isSubTop || inExpr)) ||
         subtype === 'KeyKey' ||
         (subtype === 'KeyOP' && extract.length === 1)
         ) {
       let thiskey
-      if (subtype === 'KeyKey') {
+      if (subtype === 'KeyKey') { // e.g., tags.tag_name, return tag_name
         thiskey = extract[0][extract[0].length-1]
       } else if (subtype === 'objectKey') {
         if (!extract) {
@@ -1685,39 +1752,57 @@ Parser.prototype.autocomplete = function (input) {
           })
           keyMatch(output, thiskey, [OPObjDict[struct.type]])
         } else if (struct.type !== 'ObjArray_or_string' || ['KeyKey', 'KeyOP', 'fieldKey'].includes(subtype)) {
-          let fields = Object.keys(root.fields)
-          let structs = [root]
-          output.push({
-            group: 'fields',
-            description: 'fields of a model',
-            data: fields
-          })
-          if (isTop || isSubTop) {
-            if (isTop) {
-              if (inLastAnd) {
-                output.push({
-                  group: 'full root ops',
-                  description: 'operation in the root level(last and)',
-                  data: OPDict.root_full
-                })
-              } else {
-                output.push({
-                  group: 'root ops',
-                  description: 'operation in the root level',
-                  data: OPDict.root
-                })
-              }
+          let structs = []
+          if (!inExpr) {
+            let fields = Object.keys(root.fields)
+            structs.push(root)
+            output.push({
+              group: 'fields',
+              description: 'subfields',
+              data: fields
+            })
+          } else { // inExpr
+            let fields = OPDict[struct.type]
+            structs.push(OPObjDict[struct.type])
+            output.push({
+              group: struct.type,
+              description: struct.type,
+              data: fields
+            })
+            if (struct.type === 'expr_op') {
               output.push({
-                group: 'logical ops',
-                data: OPDict.logical
-              })
-              structs.push(OP_ROOT)
-            } else if (isSubTop) {
-              output.push({
-                group: 'logical ops',
-                data: OPDict.logical
+                group: 'all sub fields',
+                description: 'all sub fields',
+                data: this.getAllSubFields()
               })
             }
+          }
+          if (isTop) {
+            if (inLastAnd) {
+              output.push({
+                group: 'full root ops',
+                description: 'operation in the root level(last and)',
+                data: OPDict.root_full
+              })
+            } else {
+              output.push({
+                group: 'root ops',
+                description: 'operation in the root level',
+                data: OPDict.root
+              })
+            }
+            output.push({
+              group: 'logical ops',
+              data: OPDict.logical
+            })
+            structs.push(OP_ROOT)
+            structs.push(OP_logical)
+          }
+          if (isSubTop) {
+            output.push({
+              group: 'logical ops',
+              data: OPDict.logical
+            })
             structs.push(OP_logical)
           }
           keyMatch(output, thiskey, structs)
@@ -1726,7 +1811,7 @@ Parser.prototype.autocomplete = function (input) {
         } else { // tags: {}, struct type is 'ObjArray_or_string'
           output = output.concat([
             {
-              group: `short as ${path[path.length-1]}.${root.primary_key}`,
+              group: `abbr of ${path[path.length-1]}.${root.primary_key}`,
               data: OPDict.String,
             },
             {
@@ -1742,10 +1827,12 @@ Parser.prototype.autocomplete = function (input) {
           group: `${rawpath.join('.')}.?`,
           always: true,
         })
-        output.push({
-          group: `global ops`,
-          data: OPDict.global,
-        })
+        if (subtype !== 'KeyKey') { // e.g., flags.
+          output.push({
+            group: `global ops`,
+            data: OPDict.global,
+          })
+        }
       }
       result.valueType = 'key_only'
     } else if (subtype === 'KeyOP') { //
@@ -1766,7 +1853,7 @@ Parser.prototype.autocomplete = function (input) {
           structs.push( opSimpleStruct(OPObjDict[optype]) )
         } else if (optype === 'ObjArray_or_string') { // tags|
           output.push({
-              group: `short as ${path[path.length-1]}.${root.primary_key}`,
+              group: `abbr of ${path[path.length-1]}.${root.primary_key}`,
               data: OPDict.String.map(_ => _.slice(1)),
           })
           output.push({
@@ -1784,15 +1871,17 @@ Parser.prototype.autocomplete = function (input) {
           })
           structs.push( opSimpleStruct(OPObjDict.logical) )
         }
-        output.push({
-          group: `global ops`,
-          data: OPDict.global.map(_ => _.slice(1)),
-        })
-        structs.push( opSimpleStruct(OPObjDict.global) )
+        if (optype==='object') { // e.g., flags
+          output.push({
+            group: `global ops`,
+            data: OPDict.global.map(_ => _.slice(1)),
+          })
+          structs.push( opSimpleStruct(OPObjDict.global) )
+        }
         keyMatch(output, thiskey, structs)
       } else {
         output.push({
-          group: `unknown operations`,
+          group: `op for unknown structure`,
           always: true,
         })
       }
@@ -1805,6 +1894,7 @@ Parser.prototype.autocomplete = function (input) {
     }
     if (subtype === 'ValueBlock' && inLastAnd) {
       result.valueType = 'key_value'
+      result.completeField = '$text'
     }
   } else if (type === 'value') { // autocomplete value
     result.string = extract
@@ -1825,24 +1915,96 @@ Parser.prototype.autocomplete = function (input) {
           group: `type: object`,
           data: valueCompleteDict.object(),
         })
+      } else if (['$and', '$or', '$not'].includes(thiskey)) {
+        output.push({
+          group: `type: array`,
+          data: valueCompleteDict.array(),
+        })
+      } else if (inExprLike) {
+        output.push({
+          group: `all sub fields`,
+          data: this.getAllSubFields(),
+        })
       } else if (struct) {
         let thisarray = struct.array
-        let thistype = struct.type
-        thistype = thisarray?'array':thistype
-        let item = valueCompleteDict[thistype] && valueCompleteDict[thistype]()
-        if (item !== null) {
+        let thistype  = struct.type
+        let isop      = struct.op
+        let primary_key = field && field.primary_key
+        if (thistype === 'fields') {
           output.push({
-            group: `type: ${thistype}`,
-            data: item,
+            group: `all sub fields`,
+            data: this.getAllSubFields(),
           })
+        } else if (!primary_key) {
+          thistype = thisarray?'array':thistype
+          let item = valueCompleteDict[thistype] && valueCompleteDict[thistype]()
+          if (item !== undefined) {
+            if (!isop) {
+              if (thistype === 'string' || thistype === 'number') {
+                item.push({
+                  data: "[]",
+                  cursorOffset: -1,
+                  comment: `abbr of ${thiskey}|in:[]`
+                })
+              }
+            }
+            output.push({
+              group: `type: ${thistype}`,
+              data: item,
+            })
+          }
+        } else {
+          thistype = thisarray?'array':thistype
+          let item = valueCompleteDict[thistype] && valueCompleteDict[thistype](`${thiskey}.${primary_key}`)
+          if (item !== undefined) {
+            if (!isop) {
+              if (thistype === 'string' || thistype === 'number') {
+                item.push({
+                  data: "[]",
+                  cursorOffset: -1,
+                  comment: `abbr of ${thiskey}.${primary_key}|in:[]`
+                })
+              }
+            }
+            output.push({
+              group: `type: ${thistype}`,
+              data: item,
+            })
+          }
         }
       }
     } else {
       if (struct) {
+        let thistype  = struct.type
+        if (subtype === 'arrayValue' && structPath[structPath.length-1]!=='$in') {
+          let group
+          if (field.primary_key) {
+            group = `abbr of ${field.path}.${field.primary_key}|in:[]`
+          } else {
+            group = `abbr of ${field.path}|in:[]`
+          }
+          output.push({
+            group,
+            always: true,
+          })
+        }
         output.push({
           group: `type: ${struct.type}`,
-          always: true
+          always: true,
         })
+        if (thistype === 'fields') {
+          output.push({
+            group: `all sub fields`,
+            data: this.getAllSubFields(),
+          })
+        }
+      } else {
+        if (inExprLike) {
+          output.push({
+            group: `all sub fields`,
+            data: this.getAllSubFields(),
+          })
+        }
       }
     }
   }

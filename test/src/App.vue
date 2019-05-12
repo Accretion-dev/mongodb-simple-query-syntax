@@ -8,7 +8,7 @@
     </test-env>
     <test-env>
       <test-block title="Test simple search0" name="search0" id="search0-id" :fold="false">
-        <parse-test-pre :content="testData.search0.content" :contentObj="testData.search0.contentObj" :struct="dbstruct.Article"/>
+        <parse-test-pre :content="testData.search0.content" :contentObj="testData.search0.contentObj" :struct="dbstruct.Article" :debuglog="true"/>
       </test-block>
     </test-env>
     <test-env>
@@ -167,8 +167,10 @@ let testData = {
   search0: {
     content:  `
       SingleKey
+      "1"
+      ""
       `,
-    contentObj: {$and: ['SingleKey']},
+    contentObj: {$and: ['SingleKey', "1", ""]},
   },
   search1: {
     content:  `
@@ -486,6 +488,11 @@ let testData = {
     tags: ||
     tags: foo ||
     tags: /foo/ ||
+    tags. ||
+    tags.tag_name ||
+    tags.tag_name: ||
+    tags.tag_name: "" ||
+    tags.tag_name: "foo" ||
     tags: {} ||
     tags: {$i} ||
     tags: {$in} ||
@@ -657,10 +664,10 @@ let testData = {
     $text: {$search: } ||
     $text: {$search: good} ||
     $text| ||
-    $text|$sear ||
-    $text|$search ||
-    $text|$search: ||
-    $text|$search: "good" ||
+    $text|sear ||
+    $text|search ||
+    $text|search: ||
+    $text|search: "good" ||
     $expr ||
     $expr: ||
     $expr:{} ||
@@ -671,10 +678,14 @@ let testData = {
     $expr:{$and:[$g]} ||
     $expr:{$and:[$gt]} ||
     $expr:{$and:[$gt:]} ||
+    $expr:{$and:[$gt:[]]} ||
     $expr:{$and:[$gt:[""]]} ||
     $expr:{$and:[$gt:["$ti"]]} ||
     $expr:{$and:[$gt:["$title"]]} ||
-    $expr:{$and:[$gt:["$title", good]]} ||
+    $expr:{$and:[$gt:["$title", $abs]]} ||
+    $expr:{$and:[$gt:["$title", $abs:]]} ||
+    $expr:{$and:[$gt:["$title", $abs:""]]} ||
+    $expr:{$and:[$gt:["$title", $abs:"$field"]]} ||
     $expr| ||
     $expr|an ||
     $expr|and ||
@@ -697,6 +708,18 @@ let testData = {
     $expr|and: [$or:[$lt:[$hour:"$ctime",10]],$eq:[""]] ||
     $expr|and: [$or:[$lt:[$hour:"$ctime",10]],$eq:["$title"]] ||
     $expr|and: [$or:[$lt:[$hour:"$ctime",10]],$eq:["$title", /foo/]] ||
+    $unwind ||
+    $unwind: ||
+    $unwind:{} ||
+    $unwind:{blabla} ||
+    $unwind:{blabla:} ||
+    $unwind:{blabla:1} ||
+    $addFields ||
+    $addFields: ||
+    $addFields:{} ||
+    $addFields:{blabla} ||
+    $addFields:{blabla:} ||
+    $addFields:{blabla:1} ||
     last "search template" -gg
     `
   }

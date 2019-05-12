@@ -70,6 +70,10 @@ export default {
     contentObj: {
       type: Object,
       default: null,
+    },
+    debuglog: {
+      type: Boolean,
+      default: false,
     }
   },
   data () {
@@ -151,7 +155,7 @@ export default {
       }
     },
     onChangeInput () {
-      this.parser = new Parser({struct: this.struct, options:{print: true, logFull: false}})
+      this.parser = new Parser({struct: this.struct, options:{print: true, logFull: false, logSimple: this.debuglog}})
       let result = this.parser.parse({content: this.content})
       this.keyPositions = this.parser.tracer.keyPositions
       if (this.contentObj && !equal(result, this.contentObj)) {
