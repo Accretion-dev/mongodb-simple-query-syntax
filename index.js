@@ -55,7 +55,7 @@ const OP_ROOT = {
     },
     $text: OP_text,
     $unwind: {
-      description: 'unwind', type: 'object',
+      description: 'unwind', type: 'String',
     },
     $addFields: {
       description: 'addFields', type: 'object'
@@ -1998,7 +1998,6 @@ Parser.prototype.autocomplete = function (input) {
             data: this.getAllSubFields(),
           })
         }
-      } else {
         if (inExprLike) {
           output.push({
             group: `all sub fields`,

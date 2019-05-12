@@ -710,10 +710,7 @@ let testData = {
     $expr|and: [$or:[$lt:[$hour:"$ctime",10]],$eq:["$title", /foo/]] ||
     $unwind ||
     $unwind: ||
-    $unwind:{} ||
-    $unwind:{blabla} ||
-    $unwind:{blabla:} ||
-    $unwind:{blabla:1} ||
+    $unwind:"$relations" ||
     $addFields ||
     $addFields: ||
     $addFields:{} ||
