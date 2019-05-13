@@ -351,8 +351,10 @@ let testData = {
       metadatas.flags.name: good ||
       metadatas: /foo/ ||
       metadatas|gt: foo ||
+      metadatas: {$gt:foo,$lt:bar} ||
       metadatas|in: ['good','bad',/nice/] ||
       metadatas|el: {metadata_name|in:['good',/nice/], ctime|gt:'2019', flags.name: 'good', value|gt: 100,metadata_id:[1,2,3]} ||
+      metadatas|len: {$gt:5, $lt:10} ||
       r.Article|in: ['123', '456', /789/] ||
       r.Book|len|gt: 10 ||
       $expr: {
@@ -383,6 +385,7 @@ let testData = {
         {'metadatas.flags.name':'good'},
         {metadatas:/foo/},
         {metadatas:{$gt:'foo'}},
+        {metadatas:{$gt:'foo',$lt:'bar'}},
         {metadatas:{$in:['good','bad',/nice/]}},
         {metadatas:{$el:{
           metadata_name:{$in:['good',/nice/]},
@@ -391,6 +394,7 @@ let testData = {
           value:{$gt: 100},
           metadata_id:[1,2,3],
         }}},
+        {metadatas:{$len: {$gt:5,$lt:10}}},
         {'r.Article':{$in:['123', '456', /789/]}},
         {'r.Book':{$len:{$gt:10}}},
         {$expr: {

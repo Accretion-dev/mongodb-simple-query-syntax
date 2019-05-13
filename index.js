@@ -1250,7 +1250,7 @@ Parser.prototype.compile = function (input, parent, key, path, level, state) {
       let key = keys[keyIndex]
       let value = input[key]
       if (this.withPrimaryKeys.includes(key)) {
-        let inEL = typeof(value)==='object' && Object.keys(value).length === 1 && ['$el', '$elemMatch'].includes(Object.keys(value)[0])
+        let inEL = typeof(value)==='object' && Object.keys(value).length === 1 && ['$el', '$elemMatch','$len'].includes(Object.keys(value)[0])
         // console.log({inEL, value, keys:Object.keys(value)})
         if (!inEL) {
           key = `${key}.${this.struct.fields[key].primary_key}`
