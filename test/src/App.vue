@@ -343,12 +343,16 @@ let testData = {
     content:`
       (id|in: [123,456,789] ||
       comments: /good for it/ ||
+      title:[foo, /bar/] ||
       origin.time|gt: 10 ||
       fathers.origin.id|gt: 'manual' ||
+      metadatas: [foo, /bar/] ||
       metadatas.ctime: ">2018" ||
       metadatas.flags.name: good ||
+      metadatas: /foo/ ||
+      metadatas|gt: foo ||
       metadatas|in: ['good','bad',/nice/] ||
-      metadatas: {metadata_name|in:['good',/nice/], ctime|gt:'2019', flags.name: 'good', value|gt: 100} ||
+      metadatas|el: {metadata_name|in:['good',/nice/], ctime|gt:'2019', flags.name: 'good', value|gt: 100,metadata_id:[1,2,3]} ||
       r.Article|in: ['123', '456', /789/] ||
       r.Book|len|gt: 10 ||
       $expr: {
@@ -371,17 +375,22 @@ let testData = {
       {$or:[
         {id:{$in:[123,456,789]}},
         {comments: /good for it/},
+        {title:['foo', /bar/]},
         {'origin.time': {$gt: 10}},
         {'fathers.origin.id': {$gt: 'manual'}},
+        {metadatas:['foo', /bar/]},
         {'metadatas.ctime':'>2018'},
         {'metadatas.flags.name':'good'},
+        {metadatas:/foo/},
+        {metadatas:{$gt:'foo'}},
         {metadatas:{$in:['good','bad',/nice/]}},
-        {metadatas:{
+        {metadatas:{$el:{
           metadata_name:{$in:['good',/nice/]},
           ctime:{$gt: '2019'},
           'flags.name': 'good',
           value:{$gt: 100},
-        }},
+          metadata_id:[1,2,3],
+        }}},
         {'r.Article':{$in:['123', '456', /789/]}},
         {'r.Book':{$len:{$gt:10}}},
         {$expr: {

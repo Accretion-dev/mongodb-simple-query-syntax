@@ -442,6 +442,7 @@ let demoStruct = {
   }
 }
 
+// define of Tracer
 function Tracer ({content, logFull, logSimple, print}) {
   this.level = 0
   this.history = []
@@ -981,10 +982,12 @@ Tracer.prototype.trace = function (event) {
   }
 }
 
+// define of Parser
 function Parser({struct, options} = {}) {
   this.struct = struct
   if (this.struct) {
     this.fields = Object.keys(this.struct.fields)
+    this.withPrimaryKeys = this.fields.filter(_ => 'primary_key' in this.struct.fields[_])
   }
   this.options = options || {}
 }
@@ -1179,7 +1182,11 @@ Parser.prototype.compile = function (input, parent, key, path, level, state) {
       }
       result.push(sub.result)
     })
-    return {result, error}
+    if (key.startsWith('$')) {
+      return {result, error}
+    } else {
+      return {result:{$in: result}, error}
+    }
   } else if (input === null) {
     return {result: null, error: [`${path.join('=>')} is null!`]}
   } else if (typeof(input) === 'string') {
@@ -1239,7 +1246,16 @@ Parser.prototype.compile = function (input, parent, key, path, level, state) {
     let oldkey = key
     let keys = Object.keys(input)
     //console.log({level, keys: JSON.stringify(keys), input})
-    for (let key of keys) {
+    for (let keyIndex in keys) {
+      let key = keys[keyIndex]
+      let value = input[key]
+      if (this.withPrimaryKeys.includes(key)) {
+        let inEL = typeof(value)==='object' && Object.keys(value).length === 1 && ['$el', '$elemMatch'].includes(Object.keys(value)[0])
+        // console.log({inEL, value, keys:Object.keys(value)})
+        if (!inEL) {
+          key = `${key}.${this.struct.fields[key].primary_key}`
+        }
+      }
       // filter all __keys__ (they are auxilliary keys in the frontend)
       let newlevel = level
       if (key.startsWith('__') && key.endsWith('__')) continue
@@ -1248,16 +1264,18 @@ Parser.prototype.compile = function (input, parent, key, path, level, state) {
       if (key === '$and' && level === 0) state.lastAnd = {result, key: oldkey, parent}
       if (key === '$len' && level === 1) state.arrayLength.push({result, parent, key:oldkey})
       if (key === '$el') { state.el.push({result}) }
-      let sub = this.compile(input[key], result, key, newpath, newlevel, state)
+      let sub = this.compile(value, result, key, newpath, newlevel, state)
       if (sub.error) {
         error = [...error, ...sub.error]
       }
       result[key] = sub.result
       if (key === '$unwind') state.unwindCount += 1
-      if (key === '$unwind') state.addFieldsCount += 1
+      if (key === '$addFields') state.addFieldsCount += 1
       if (key === '$text') state.textCount += 1
     }
     // leave return in the last part
+  } else if (typeof(input) === 'boolean') {
+    return {result: input}
   } else {
     debugger
   }
@@ -1679,7 +1697,6 @@ Parser.prototype.autocomplete = function (input) {
     rawpath = __.rawpath
   }
   let inLastAnd = this.tracer.ORs.length === 0 || cursor >= this.tracer.ORs[this.tracer.ORs.length-1]
-  console.log('path:', path, 'rawpath:', rawpath, 'inLastAnd:', inLastAnd)
   if (!this.struct) return {type:null, path} // do not do autocomplete without struct infomation
 
   let structPath = path.filter(_ => typeof(_)!=='number')
@@ -1689,6 +1706,8 @@ Parser.prototype.autocomplete = function (input) {
   let isTop = !inExpr && !isSubTop && (path.length === 0 || ['$and', '$or'].includes(structPath[structPath.length-1]))
   let isKey = type === 'key' || (type==="value" && (subtype === 'arrayValue' && (isTop || isSubTop || inExpr)))
   let inExprLike = path.findIndex(_ => _==='$unwind') > -1 || path.findIndex(_ => _==='$addFields') > -1
+  console.log('path:', path, 'rawpath:', rawpath, 'inLastAnd:', inLastAnd)
+  console.log({structPath, isTop, isSubTop, isKey, inExprLike})
 
   let struct, root, field
   if (this.struct) {
@@ -1717,7 +1736,6 @@ Parser.prototype.autocomplete = function (input) {
     type:null, complete, valueType:null, completeField: null, string:null, completeType: null, extract, path, rawpath, start, lastEnd, cursor, end, output
   }
 
-  console.log({structPath, isTop, isSubTop, isKey})
   if (isKey) {
     result.type = 'key'
     if (subtype === 'fieldKey' ||
@@ -1998,12 +2016,12 @@ Parser.prototype.autocomplete = function (input) {
             data: this.getAllSubFields(),
           })
         }
-        if (inExprLike) {
-          output.push({
-            group: `all sub fields`,
-            data: this.getAllSubFields(),
-          })
-        }
+      }
+      if (inExprLike) {
+        output.push({
+          group: `all sub fields`,
+          data: this.getAllSubFields(),
+        })
       }
     }
   }
