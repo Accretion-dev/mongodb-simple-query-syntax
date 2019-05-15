@@ -1412,6 +1412,9 @@ const keyvalueCompleteDict = {
   number: _ => ([
     `${_}:`,
   ]),
+  id: _ => ([
+    `${_}:`,
+  ]),
   date: _ => ([
     {data:`${_}:""`, cursorOffset:-1, comment: 'date filter'},
   ]),
@@ -1457,7 +1460,7 @@ function opSimpleStruct(struct) {
   return struct
 }
 function keyMatch(output, key, structs) {
-  let fullkeys = output.map(_ => _.data).flat()
+  let fullkeys = output.filter(_=>!_.noOP).map(_ => _.data).flat()
   if (!fullkeys.includes(key)) return // do nothing for output
   let index = output.findIndex(_ => _.data.includes(key))
   let item
@@ -1591,7 +1594,7 @@ function getPath(type, stack, cursor, extract) {
 Parser.prototype.getAllSubFields = function () {
   function deep(struct, father, array) {
     for (let key in struct.fields) {
-      array.push(`"\$${father}${key}"`)
+      array.push(`\$${father}${key}`)
       if ('fields' in struct.fields[key]) deep(struct.fields[key], `${father}${key}.`, array)
     }
   }
@@ -1690,6 +1693,9 @@ Parser.prototype.autocomplete = function (input, debug) {
       } else {
         result.string = thiskey
       }
+      if (input.value && input.value.quote) {
+        result.quote = input.value.quote
+      }
 
       if (struct&&root&&'fields' in root) { // known struct and root
         if (!['ObjArray_or_string', 'object'].includes(struct.type) && subtype==="objectKey") {
@@ -1703,6 +1709,20 @@ Parser.prototype.autocomplete = function (input, debug) {
           keyMatch(output, thiskey, [OPObjDict[struct.type]])
         } else if (struct.type !== 'ObjArray_or_string' || ['KeyKey', 'KeyOP', 'fieldKey'].includes(subtype)) {
           let structs = []
+          if (isTop) {
+            output.push({
+              group: 'logical ops',
+              data: OPDict.logical
+            })
+            structs.push(OP_logical)
+          }
+          if (isSubTop) {
+            output.push({
+              group: 'logical ops',
+              data: OPDict.logical
+            })
+            structs.push(OP_logical)
+          }
           if (!inExpr) {
             let fields = Object.keys(root.fields)
             structs.push(root)
@@ -1717,12 +1737,14 @@ Parser.prototype.autocomplete = function (input, debug) {
             output.push({
               group: struct.type,
               description: struct.type,
-              data: fields
+              data: fields,
+              noSort: true
             })
             if (struct.type === 'expr_op') {
               output.push({
                 group: 'all sub fields',
                 description: 'all sub fields',
+                noOP: true,
                 data: this.getAllSubFields()
               })
             }
@@ -1741,19 +1763,7 @@ Parser.prototype.autocomplete = function (input, debug) {
                 data: OPDict.root
               })
             }
-            output.push({
-              group: 'logical ops',
-              data: OPDict.logical
-            })
             structs.push(OP_ROOT)
-            structs.push(OP_logical)
-          }
-          if (isSubTop) {
-            output.push({
-              group: 'logical ops',
-              data: OPDict.logical
-            })
-            structs.push(OP_logical)
           }
           keyMatch(output, thiskey, structs)
         } else if (subtype === 'arrayValue') {
@@ -1805,6 +1815,7 @@ Parser.prototype.autocomplete = function (input, debug) {
           output.push({
               group: `abbr of ${path[path.length-1]}.${root.primary_key}`,
               data: OPDict.String.map(_ => _.slice(1)),
+              noSort: true
           })
           output.push({
               group: `${path[path.length-1]} object ops`,
