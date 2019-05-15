@@ -51,7 +51,7 @@
 <script>
 const clsPrefix = 'parse-test-pre'
 const path = require('path')
-const {SyntaxError, parse, Tracer, Parser} = require('../../../index.js')
+import {SyntaxError, parse, Tracer, Parser} from '../../../index.js'
 import lodash from 'lodash'
 import equal from 'deep-equal'
 import { diff, addedDiff, deletedDiff, updatedDiff, detailedDiff } from 'deep-object-diff'

@@ -208,87 +208,6 @@ const OPObjDict = {
   object: OP_global,
   logical: OP_logical,
 }
-/*
-TODO:
-  * support reg
-  * add =><+- into simpleString
-  * make a daterange parser
-  * make a date parser
-  * backend
-    * pinyin plugin
-    * lm query
-*/
-
-/*
-* stringField non match
-  * query primary keys and do lm
-* string:
-  stringField
-    => stringField|reg,in,nin,lt,gt,lte,gte
-  stringValue:
-    if null:
-      'string or regex'
-    if string or simpleString
-      => lm method
-    if reg:
-      reg filter
-* number:
-  numberField:
-    => numberField|lt,gt,lte,gte,eq,ne,in,nin
-  numberValue:
-    if null:
-      'number or filter'
-    if number:
-      => lm method
-    if simpleString
-      apply filter, sort, and lm method
-* date:
-  dateField:
-    => dateField|lt,gt,lte,gte
-  dateValue:
-    if null:
-      'date or filter'
-    do date parse
-      return a date
-        lm method
-      return a function:
-        do filter
-          lm method
-* bool:
-    boolField
-    voolValue:
-      true
-      false
-
-* unknown:
-    no auto complete
-
-* array_number,string,date:
-    field:
-      => field|lt,gt,lte,gte,elemMatch, field:{}
-    field|elemMatch
-      => field|elemMatch|,lt,gt,lte,gte,or,and, field|elemMatch:{}
-
-    in object:
-      subfield,
-
-    value and value inside {}:like the single value
-* array of unknown
-    field:
-      => field|lt,gt,lte,gte,elemMatch, field:{}
-    value:
-      no auto complete
-* object:
-    objectField:
-      => objectField.subfields
-      => => ....
-    objectValue:
-* array of object
-    arrayField:
-      => arrayField.objectFields
-
-
-*/
 
 class ParseError extends Error {
   constructor (start, end, expected, before, after) {
@@ -1692,7 +1611,7 @@ Parser.prototype.autocomplete = function (input) {
   if (stateStack && subtype !== 'ValueBlock') {
     let stack = stateStack.filter(_ => !(['AND','OR', 'ANDArrayWrapper', 'ORArrayWrapper'].includes(_.type)))
     // console.log('stack:', stack)
-    __ = getPath(type, stack, cursor, extract)
+    let __ = getPath(type, stack, cursor, extract)
     path = __.path
     rawpath = __.rawpath
   }
@@ -2030,7 +1949,8 @@ Parser.prototype.autocomplete = function (input) {
   return result
 }
 
-module.exports = {
+//module.exports =
+export {
   parse,
   SyntaxError,
   Tracer,
