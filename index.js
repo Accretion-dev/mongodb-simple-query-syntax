@@ -393,7 +393,8 @@ Tracer.prototype.formatInt = function (int, width) {
 }
 Tracer.prototype.getAutocompleteType = function (cursor, log, detail, print) {
   let length = this.content.length
-  if (cursor<0 || cursor > length) throw Error(`bad cursor position: should be within [0, ${length}]`)
+  if (cursor < 0) cursor = 0
+  if (cursor > length) cursor = length
 
   let related = this.traceInfo.filter(_ => _.location.start.offset<=cursor && _.location.end.offset>=cursor && _.result!==null)
   let thisStruct = null
@@ -935,7 +936,7 @@ Parser.prototype.parse = function ({content, cursor}) {
   this.result = result
   if (cursor !== undefined) {
     analysis = tracer.getAutocompleteType(cursor, log, detail, print)
-    autocomplete = this.autocomplete(analysis)
+    autocomplete = this.autocomplete(analysis, this.options.debug)
     return {result, analysis, autocomplete}
   } else {
     return result
@@ -948,7 +949,7 @@ Parser.prototype.analysis = function (cursor) {
   let print = this.options.print
   let result = this.result
   let analysis = this.tracer.getAutocompleteType(cursor, log, detail, print)
-  let autocomplete = this.autocomplete(analysis)
+  let autocomplete = this.autocomplete(analysis, this.options.debug)
   return {result, analysis, autocomplete}
 }
 
@@ -1601,10 +1602,12 @@ Parser.prototype.getAllSubFields = function () {
     return this.allSubFields
   }
 }
-Parser.prototype.autocomplete = function (input) {
+Parser.prototype.autocomplete = function (input, debug) {
   let {type, subtype, valueType, stateStack, extract, cursor, start, end, complete, lastEnd, rawtype} = input
-  console.log('===================================================================================')
-  console.log(input)
+  if (debug) {
+    console.log('===================================================================================')
+    console.log(input)
+  }
   let path = []
   let rawpath = []
   if (!type) return {type: null} // not good cursor position for auto complete
@@ -1625,8 +1628,10 @@ Parser.prototype.autocomplete = function (input) {
   let isTop = !inExpr && !isSubTop && (path.length === 0 || ['$and', '$or'].includes(structPath[structPath.length-1]))
   let isKey = type === 'key' || (type==="value" && (subtype === 'arrayValue' && (isTop || isSubTop || inExpr)))
   let inExprLike = path.findIndex(_ => _==='$unwind') > -1 || path.findIndex(_ => _==='$addFields') > -1
-  console.log('path:', path, 'rawpath:', rawpath, 'inLastAnd:', inLastAnd)
-  console.log({structPath, isTop, isSubTop, isKey, inExprLike})
+  if (debug) {
+    console.log('path:', path, 'rawpath:', rawpath, 'inLastAnd:', inLastAnd)
+    console.log({structPath, isTop, isSubTop, isKey, inExprLike})
+  }
 
   let struct, root, field
   if (this.struct) {
@@ -1635,20 +1640,22 @@ Parser.prototype.autocomplete = function (input) {
     root = __.root
     field = __.field
   }
-  console.log({
-    root:root?JSON.parse(JSON.stringify(root)):null,
-    struct:struct?JSON.parse(JSON.stringify(struct)):null,
-    field:field?JSON.parse(JSON.stringify(field)):null,
-  })
-  console.log(
-    start,lastEnd,cursor,end,
-    input,
-    struct ? {
-      type: struct.type,
-      array: struct.array,
-      root_fields: root ? (root.fields ? Object.keys(root.fields).join(',') : null): null
-    }: null,
-  )
+  if (debug) {
+    console.log({
+      root:root?JSON.parse(JSON.stringify(root)):null,
+      struct:struct?JSON.parse(JSON.stringify(struct)):null,
+      field:field?JSON.parse(JSON.stringify(field)):null,
+    })
+    console.log(
+      start,lastEnd,cursor,end,
+      input,
+      struct ? {
+        type: struct.type,
+        array: struct.array,
+        root_fields: root ? (root.fields ? Object.keys(root.fields).join(',') : null): null
+      }: null,
+    )
+  }
   //if (!this.struct) return {type:null}
   let output = []
   let result = {
@@ -1677,7 +1684,11 @@ Parser.prototype.autocomplete = function (input) {
         // when subtype is key, thiskey is a array and will not match, as expected
         thiskey = extract
       }
-      result.string = thiskey
+      if (subtype === 'KeyOP') {
+        result.string = ''
+      } else {
+        result.string = thiskey
+      }
 
       if (struct&&root&&'fields' in root) { // known struct and root
         if (!['ObjArray_or_string', 'object'].includes(struct.type) && subtype==="objectKey") {
@@ -1944,8 +1955,10 @@ Parser.prototype.autocomplete = function (input) {
       }
     }
   }
-  console.log(JSON.stringify({extract, output},null,2))
-  console.log(result)
+  if (debug) {
+    console.log(JSON.stringify({extract, output},null,2))
+    console.log(result)
+  }
   return result
 }
 
