@@ -829,6 +829,7 @@ Tracer.prototype.traceback = function () {
     }
   }
   this.keyPositions.reverse()
+  this.keyPositions.push({start: this.content.length, end: this.content.length, type: 'end'})
   this.traceInfo.reverse()
   this.ORs.reverse()
 }
@@ -1696,6 +1697,7 @@ Parser.prototype.autocomplete = function (input, debug) {
           let data = OPDict[struct.type]
           output.push({
             group: `${struct.type} ops`,
+            noSort: true,
             data,
           })
           keyMatch(output, thiskey, [OPObjDict[struct.type]])
@@ -1757,16 +1759,14 @@ Parser.prototype.autocomplete = function (input, debug) {
         } else if (subtype === 'arrayValue') {
           debugger
         } else { // tags: {}, struct type is 'ObjArray_or_string'
-          output = output.concat([
-            {
-              group: `abbr of ${path[path.length-1]}.${root.primary_key}`,
-              data: OPDict.String,
-            },
-            {
-              group: `${path[path.length-1]} object ops`,
-              data: OPDict.array_object,
-            }
-          ])
+          output.push({
+            group: `abbr of ${path[path.length-1]}.${root.primary_key}`,
+            data: OPDict.String,
+          })
+          output.push({
+            group: `${path[path.length-1]} object ops`,
+            data: OPDict.array_object,
+          })
           let structs = [OP_string, OP_array_object]
           keyMatch(output, thiskey, structs)
         }
@@ -1797,6 +1797,7 @@ Parser.prototype.autocomplete = function (input, debug) {
           output.push({
             group: `${optype} ops`,
             data:ops,
+            noSort: true,
           })
           structs.push( opSimpleStruct(OPObjDict[optype]) )
         } else if (optype === 'ObjArray_or_string') { // tags|

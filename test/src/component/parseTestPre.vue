@@ -155,7 +155,7 @@ export default {
       }
     },
     onChangeInput () {
-      this.parser = new Parser({struct: this.struct, options:{print: true, logFull: false, logSimple: this.debuglog}})
+      this.parser = new Parser({struct: this.struct, options:{print: true, logFull: false, logSimple: this.debuglog, debug:true}})
       let result = this.parser.parse({content: this.content})
       this.keyPositions = this.parser.tracer.keyPositions
       if (this.contentObj && !equal(result, this.contentObj)) {
