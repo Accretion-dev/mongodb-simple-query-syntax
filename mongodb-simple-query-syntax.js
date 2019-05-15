@@ -6988,8 +6988,7 @@ function peg$parse(input, options) {
   }
 }
 
-module.exports = {
-  SyntaxError:   peg$SyntaxError,
-  DefaultTracer: peg$DefaultTracer,
-  parse:         peg$parse
-};
+let SyntaxError   = peg$SyntaxError
+let DefaultTracer = peg$DefaultTracer
+let parse         = peg$parse
+export { SyntaxError, DefaultTracer, parse}
