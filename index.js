@@ -1766,6 +1766,7 @@ Parser.prototype.autocomplete = function (input, debug) {
           output.push({
             group: `${path[path.length-1]} object ops`,
             data: OPDict.array_object,
+            noSort: true
           })
           let structs = [OP_string, OP_array_object]
           keyMatch(output, thiskey, structs)
