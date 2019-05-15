@@ -1,12 +1,9 @@
 import test from 'ava'
 import path from 'path'
 import {SyntaxError, parse, Tracer, Parser} from '../index.js'
-import _date from '../filter-date.js'
-let {parse: DateFilter} = _date
-import _number from '../filter-number.js'
-let {parse: NumberFilter} = _number
-import _mongodb_date from '../filter-date-mongodb.js'
-let {parse: MongodbDateFilter} = _mongodb_date
+let DateFilter = require('../filter-date.js').parse
+let NumberFilter = require('../filter-number.js').parse
+let MongodbDateFilter = require('../filter-date-mongodb.js').parse
 const {DateTime} = require('luxon')
 console.log('new run')
 
