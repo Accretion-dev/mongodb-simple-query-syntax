@@ -829,7 +829,9 @@ Tracer.prototype.traceback = function () {
     }
   }
   this.keyPositions.reverse()
-  this.keyPositions.push({start: this.content.length, end: this.content.length, type: 'end'})
+  if (this.keyPositions.length && this.keyPositions[this.keyPositions.length-1].end !== this.content.length) {
+    this.keyPositions.push({start: this.content.length, end: this.content.length, type: 'end'})
+  }
   this.traceInfo.reverse()
   this.ORs.reverse()
 }
@@ -1614,6 +1616,7 @@ Parser.prototype.autocomplete = function (input, debug) {
   }
   let path = []
   let rawpath = []
+  let selfKeyPositions = [{start,end,valueType}]
   if (!type) return {type: null} // not good cursor position for auto complete
   if (stateStack && subtype !== 'ValueBlock') {
     let stack = stateStack.filter(_ => !(['AND','OR', 'ANDArrayWrapper', 'ORArrayWrapper'].includes(_.type)))
@@ -1621,6 +1624,12 @@ Parser.prototype.autocomplete = function (input, debug) {
     let __ = getPath(type, stack, cursor, extract)
     path = __.path
     rawpath = __.rawpath
+    stateStack.slice().reverse().forEach(_ => {
+      let last = selfKeyPositions[selfKeyPositions.length-1]
+      if (_.start!==last.start || _.end!==last.end) {
+        selfKeyPositions.push({start:_.start, end:_.end, type:_.type})
+      }
+    })
   }
   let inLastAnd = this.tracer.ORs.length === 0 || cursor >= this.tracer.ORs[this.tracer.ORs.length-1]
   if (!this.struct) return {type:null, path} // do not do autocomplete without struct infomation
@@ -1663,7 +1672,21 @@ Parser.prototype.autocomplete = function (input, debug) {
   //if (!this.struct) return {type:null}
   let output = []
   let result = {
-    type:null, complete, valueType:null, completeField: null, string:null, completeType: null, extract, path, rawpath, start, lastEnd, cursor, end, output
+    type:null,
+    complete,
+    valueType:null,
+    completeField: null,
+    string:null,
+    completeType: null,
+    extract,
+    path,
+    rawpath,
+    start,
+    lastEnd,
+    cursor,
+    end,
+    output,
+    selfKeyPositions,
   }
 
   if (isKey) {
