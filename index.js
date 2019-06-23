@@ -1,8 +1,8 @@
 const path = require('path')
-let {SyntaxError, parse} = require('./mongodb-simple-query-syntax.js')
-let {parse: NumberParser} = require('./filter-number.js')
-let {parse: DateParser} = require('./filter-date.js')
-let {parse: MongodbDateParser} = require('./filter-date-mongodb.js')
+let {SyntaxError, parse}       = require('./pegjs/mongodb-simple-query-syntax.js')
+let {parse: NumberParser}      = require('./pegjs/filter-number.js')
+let {parse: DateParser}        = require('./pegjs/filter-date.js')
+let {parse: MongodbDateParser} = require('./pegjs/filter-date-mongodb.js')
 const {DateTime} = require('luxon')
 
 // general operations

@@ -1,9 +1,10 @@
 import test from 'ava'
 import path from 'path'
 import {SyntaxError, parse, Tracer, Parser} from '../index.js'
-let DateFilter = require('../filter-date.js').parse
-let NumberFilter = require('../filter-number.js').parse
-let MongodbDateFilter = require('../filter-date-mongodb.js').parse
+let DateFilter = require('../pegjs/filter-date.js').parse
+let NumberFilter = require('../pegjs/filter-number.js').parse
+let MongodbDateFilter = require('../pegjs/filter-date-mongodb.js').parse
+let JsonFilter = require('../pegjs/json-filter.js').parse
 const {DateTime} = require('luxon')
 console.log('new run')
 
@@ -658,6 +659,11 @@ test('test date filter-mongodb syntax', t => {
   //console.log(JSON.stringify(result, null, 2))
   t.pass()
   return
+})
+test('test json-filter parser', t => {
+  let result
+  let parse = JsonFilter
+  t.pass()
 })
 
 export default {todo, todoObj}

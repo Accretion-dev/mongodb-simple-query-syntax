@@ -5348,7 +5348,7 @@ function peg$parse(input, options) {
   }
 }
 
-let SyntaxError   = peg$SyntaxError
+let SyntaxError = peg$SyntaxError
 let DefaultTracer = peg$DefaultTracer
-let parse         = peg$parse
+let parse = peg$parse
 export { SyntaxError, DefaultTracer, parse}
