@@ -2,10 +2,26 @@
 }
 
 start
-  = StartOR
+  = Empty
+  / StartOR
   / StartAND
   / StartNOT
   / StartValue
+
+Empty
+  = "" {
+    return {
+      type: 'root',
+      wsBegin: "",
+      wsEnd: "",
+      value: {
+        valueType: 'string',
+        value: "",
+        string: "",
+      },
+      string: text(),
+    }
+  }
 
 StartOR "startor"
   = wsBegin:ws10 v:OR wsEnd:ws01 {
@@ -382,6 +398,11 @@ PairMissValue
       key,
       wsBefore,
       wsAfter: wsAfter?wsAfter:'',
+      value: {
+        valueType: 'string',
+        value: "",
+        string: "",
+      },
       string: text(),
     }
   }
