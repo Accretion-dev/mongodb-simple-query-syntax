@@ -2,9 +2,10 @@
 }
 
 start
-  = StartValue
-  / StartOR
+  = StartOR
   / StartAND
+  / StartNOT
+  / StartValue
 
 StartOR "startor"
   = wsBegin:ws10 v:OR wsEnd:ws01 {
@@ -18,6 +19,16 @@ StartOR "startor"
   }
 StartAND "startand"
   = wsBegin:ws10 v:ANDBlock wsEnd:ws01 {
+    return {
+      type: 'root',
+      wsBegin,
+      wsEnd,
+      value: v,
+      string: text(),
+    }
+  }
+StartNOT "startnot"
+  = wsBegin:ws10 v:NOT wsEnd:ws01 {
     return {
       type: 'root',
       wsBegin,
@@ -140,7 +151,7 @@ Block "block"
   / ValueBlock
 
 NestedBlock 'nestedblock'
-  = nestedStart ws10 v:OR ws01 nestedEnd
+  = nestedStart wsBefore:ws10 v:OR wsAfter:ws01 nestedEnd
     {
       return {
         type: 'nested',
@@ -151,7 +162,7 @@ NestedBlock 'nestedblock'
         string: text(),
       }
     }
-  / nestedStart ws10 v:AND ws01 nestedEnd
+  / nestedStart wsBefore:ws10 v:AND wsAfter:ws01 nestedEnd
     {
       return {
         type: 'nested',
@@ -162,7 +173,7 @@ NestedBlock 'nestedblock'
         string: text(),
       }
     }
-  / nestedStart ws10 v:NOT ws01 nestedEnd
+  / nestedStart wsBefore:ws10 v:NOT wsAfter:ws01 nestedEnd
     {
       return {
         type: 'nested',
@@ -173,7 +184,7 @@ NestedBlock 'nestedblock'
         string: text(),
       }
     }
-  / nestedStart ws10 v:Pair ws01 nestedEnd
+  / nestedStart wsBefore:ws10 v:Pair wsAfter:ws01 nestedEnd
     {
       return {
         type: 'nested',
@@ -566,11 +577,12 @@ HexDigit
   = [0-9a-f]i
 
 RegularExpression "regular expression"
-  = "/" pattern:$RegularExpressionBody "/" flags:$RegularExpressionFlags {
-      var value;
+  = "/" pattern:$RegularExpressionBody? "/" flags:$RegularExpressionFlags {
+      let value
+      if (!pattern) pattern = ""
 
       try {
-        value = new RegExp(pattern, flags);
+        value = new RegExp(pattern, flags)
       } catch (e) {
         error(e.message);
       }
