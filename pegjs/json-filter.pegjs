@@ -1,18 +1,71 @@
 {
+  function pos() {
+    let start = location().start.offset
+    let end = location().end.offset
+    return {start, end}
+  }
+  function isValue (tree) {
+    if (typeof(tree) !== 'object') {
+      return true
+    } else {
+      if (tree.type || tree.valueType) {
+        return false
+      } else {
+        return true
+      }
+    }
+  }
+  function updateString (tree) {
+    if (tree.type === 'root') {
+      tree.string = tree.wsBegin + updateString(tree.value) + tree.wsEnd
+    } else if (tree.type === 'orItem' || tree.type === 'andItem') {
+      tree.string = tree.wsBefore + tree.delimiter + tree.wsAfter + updateString(tree.value)
+    } else if (tree.type === 'or' || tree.type === 'and') {
+      tree.string = tree.value.map(_ => updateString(_)).join("")
+    } else if (tree.type === 'not') {
+      tree.string = tree.delimiter + tree.ws + updateString(tree.value)
+    } else if (tree.type === 'nested') {
+      // nestedStart = "(", nestedEnd = ")"
+      tree.string = '(' + tree.wsBefore + updateString(tree.value) + tree.wsAfter + ')'
+    } else if (tree.type === 'objectItem' || tree.type === 'arrayItem') {
+      if (tree.index === 0) {
+        tree.string = updateString(tree.value) + tree.wsAfter
+      } else {
+        // ObjectSeperator = ','
+        tree.string = ',' + tree.wsBefore, updateString(tree.value) + tree.wsAfter
+      }
+    } else if (tree.type === 'object') {
+      // ObjectStart = "{", ObjectEnd = "}"
+      tree.string = '{' + tree.wsBegin + updateString(tree.value) + tree.tail + '}'
+    } else if (tree.type === 'object') {
+      // ArrayStart = "[", ArrayEnd = "]"
+      tree.string = '[' + tree.wsBegin + updateString(tree.value) + tree.tail + ']'
+    } else if (tree.type === 'pair') {
+      // PairSeperator = ':'
+      tree.string = updateString(tree.key) + tree.wsBefore + ':' + tree.wsAfter + updateString(tree.value)
+    }
+    return tree.string
+  }
+  function updateIndex (tree, deep) {
+
+  }
 }
 
 start
-  = Empty
-  / StartOR
+  = StartOR
   / StartAND
   / StartNOT
   / StartValue
+  / Empty
 
+// entries of starts
 Empty
-  = "" {
+  = wsBegin:ws {
+    let {start,end} = pos()
     return {
       type: 'root',
-      wsBegin: "",
+      subtype: 'empty',
+      wsBegin,
       wsEnd: "",
       value: {
         valueType: 'string',
@@ -20,128 +73,174 @@ Empty
         string: "",
       },
       string: text(),
+      start,
+      end,
     }
   }
-
 StartOR "startor"
   = wsBegin:ws10 v:OR wsEnd:ws01 {
+    let {start,end} = pos()
     return {
       type: 'root',
+      subtype: 'or',
       wsBegin,
       wsEnd,
       value: v,
       string: text(),
+      start,
+      end,
     }
   }
 StartAND "startand"
   = wsBegin:ws10 v:ANDBlock wsEnd:ws01 {
+    let {start,end} = pos()
     return {
       type: 'root',
+      subtype: 'and',
       wsBegin,
       wsEnd,
       value: v,
       string: text(),
+      start,
+      end
     }
   }
 StartNOT "startnot"
   = wsBegin:ws10 v:NOT wsEnd:ws01 {
+    let {start,end} = pos()
     return {
       type: 'root',
+      subtype: 'not',
       wsBegin,
       wsEnd,
       value: v,
       string: text(),
+      start,
+      end,
     }
   }
 StartValue "startvalue"
   = wsBegin:ws10 v:Value wsEnd:ws01 {
+    let {start,end} = pos()
     return {
       type: 'root',
+      subtype: 'value',
       wsBegin,
       wsEnd,
       value: v,
       string: text(),
+      start,
+      end,
     }
   }
 
+// entries of blanks
 sws "singlewhitespace"
   = chars:[ \t\n\r]
-
 ws "whitespace"
   = chars:[ \t\n\r]* { return chars.join("") }
-
-// means when start <  cursorPos <  end, do auto complete
-ws00 'ws00'
+ws00 'ws00' // means when start <  cursorPos <  end, do auto complete
   = ws
-// means when start <= cursorPos <  end, do auto complete
-ws10 'ws10'
+ws10 'ws10' // means when start <= cursorPos <  end, do auto complete
   = ws
-// means when start <  cursorPos <= end, do auto complete
-ws01 'ws01'
+ws01 'ws01' // means when start <  cursorPos <= end, do auto complete
   = ws
 
 OR "or"
   = values:(
     head:ANDBlock
     tail:(wsBefore:ws01 delimiter:ORSeperator wsAfter:ws10 v:ANDBlock {
+      let {start,end} = pos()
+      v.inside = 'or'
       return {
         type: 'orItem',
         wsBefore,
-        delimiter,
+        delimiter: delimiter.string,
+        badPositions: delimiter.badPositions,
         wsAfter,
         value: v,
-        string: text()
+        string: text(),
+        start,
+        end,
       }
     })+
     {
+      head.inside = 'or'
       let headItem = {
         type: 'orItem',
-        wsBefore:null,
-        delimiter: null,
-        wsAfter: null,
+        wsBefore: '',
+        delimiter: '',
+        wsAfter: '',
         value: head,
         string: head.string,
+        start: head.start,
+        end: head.end,
+        index: 0,
       }
-      return {
-        type: 'or',
-        value: [headItem].concat(tail),
-        string: text(),
+      for (let index=1; index<=tail.length; index+=1) {
+        tail[index-1].index = index
       }
-
+      return [headItem].concat(tail)
     }
   )
-  {return values}
+  {
+    let {start,end} = pos()
+    return {
+      type: 'or',
+      value: values,
+      string: text(),
+      start,
+      end,
+    }
+  }
 
 AND "and"
   = values:(
     head:NOTBlock
     tail:(delimiter:ANDSeperator wsAfter:ws10 v:NOTBlock {
+      let {start,end} = pos()
+      v.inside = 'and'
       return {
         type: 'andItem',
-        wsBefore:null,
-        delimiter,
+        wsBefore:"",
+        delimiter: delimiter.string,
+        badPositions: delimiter.badPositions,
         wsAfter,
         value: v,
-        string: text()
+        string: text(),
+        start,
+        end,
       }
     })+
     {
+      head.inside = 'and'
       let headItem = {
         type: 'andItem',
-        wsBefore:null,
-        delimiter: null,
-        wsAfter: null,
+        wsBefore: "",
+        delimiter: "",
+        wsAfter: "",
         value: head,
         string: head.string,
+        start: head.start,
+        end: head.end,
+        index: 0,
       }
-      return {
-        type: 'and',
-        value: [headItem].concat(tail),
-        string: text(),
+      for (let index=1; index<=tail.length; index+=1) {
+        tail[index-1].index = index
       }
+      return [headItem].concat(tail)
     }
   )
-  {return values}
+  {
+    let {start,end} = pos()
+    return {
+      type: 'and',
+      value: values,
+      string: text(),
+      start,
+      end,
+    }
+  }
 
 ANDBlock "andblock"
   = AND
@@ -152,12 +251,17 @@ NOTBlock "notblock"
   / Block
 
 NOT "not"
-  = NOTSeperator ws:ws block:Block {
+  = delimiter:NOTSeperator ws:ws block:Block {
+    let {start,end} = pos()
+    block.inside = 'not'
     return {
       type: 'not',
+      delimiter,
       ws,
       value: block,
       string: text(),
+      start,
+      end,
     }
   }
 
@@ -169,6 +273,8 @@ Block "block"
 NestedBlock 'nestedblock'
   = nestedStart wsBefore:ws10 v:OR wsAfter:ws01 nestedEnd
     {
+      let {start,end} = pos()
+      v.inside = 'nested'
       return {
         type: 'nested',
         subtype: 'or',
@@ -176,10 +282,14 @@ NestedBlock 'nestedblock'
         wsAfter,
         value: v,
         string: text(),
+        start,
+        end,
       }
     }
   / nestedStart wsBefore:ws10 v:AND wsAfter:ws01 nestedEnd
     {
+      let {start,end} = pos()
+      v.inside = 'nested'
       return {
         type: 'nested',
         subtype: 'or',
@@ -187,10 +297,14 @@ NestedBlock 'nestedblock'
         wsAfter,
         value: v,
         string: text(),
+        start,
+        end,
       }
     }
   / nestedStart wsBefore:ws10 v:NOT wsAfter:ws01 nestedEnd
     {
+      let {start,end} = pos()
+      v.inside = 'nested'
       return {
         type: 'nested',
         subtype: 'not',
@@ -198,10 +312,14 @@ NestedBlock 'nestedblock'
         wsAfter,
         value: v,
         string: text(),
+        start,
+        end,
       }
     }
   / nestedStart wsBefore:ws10 v:Pair wsAfter:ws01 nestedEnd
     {
+      let {start,end} = pos()
+      v.inside = 'nested'
       return {
         type: 'nested',
         subtype: 'pair',
@@ -209,10 +327,14 @@ NestedBlock 'nestedblock'
         wsAfter,
         value: v,
         string: text(),
+        start,
+        end,
       }
     }
   / nestedStart wsBefore:ws10 v:ValueBlock wsAfter:ws01 nestedEnd
     {
+      let {start,end} = pos()
+      v.inside = 'nested'
       return {
         type: 'nested',
         subtype: 'value',
@@ -220,6 +342,8 @@ NestedBlock 'nestedblock'
         wsAfter,
         value: v,
         string: text(),
+        start,
+        end,
       }
     }
 
@@ -227,11 +351,28 @@ nestedStart = "("
 nestedEnd = ")"
 
 ANDSeperator
-  = ws01 '&&' { return text() }
-  / ws00
+  = ws:ws01 '&&' {
+    let {start,end} = pos()
+    return {
+      string: text(),
+      badPositions: [start+ws.length+1]
+    }
+  }
+  / ws00 {
+    return {
+      string: text(),
+      badPositions: []
+    }
+  }
 
 ORSeperator
-  = '||'
+  = '||' {
+    let {start,end} = pos()
+    return {
+      string: text(),
+      badPositions: [start+1],
+    }
+  }
 
 NOTSeperator
   = '!'
@@ -249,12 +390,16 @@ Object "object"
       head:ObjectElement wsAfter:ws01Object
       middles:(ObjectSeperator wsBefore_m:ws10Object m:ObjectElement wsAfter_m:ws01Object
         {
+          let {start,end} = pos()
+          m.inside = 'object'
           return {
             type:'objectItem',
             wsBefore: wsBefore_m,
             wsAfter: wsAfter_m,
             value: m,
             string: text(),
+            start,
+            end,
           }
         }
       )*
@@ -262,16 +407,18 @@ Object "object"
         ObjectSeperator ws01Object { return text()}
       )?
       {
+        head.inside = 'object'
         let headItem = {
           type: 'objectItem',
-          wsBefore: null,
           wsAfter,
           value: head,
           string: head.string+wsAfter,
+          start: head.start,
+          end: head.end + wsAfter.length,
           index: 0,
         }
         for (let index=1; index<=middles.length; index+=1) {
-          middles.index = index
+          middles[index-1].index = index
         }
         return {
           values: [headItem].concat(middles),
@@ -281,6 +428,7 @@ Object "object"
     )?
     ObjectEnd
     {
+      let {start,end} = pos()
       let value, tail
       if (values === null) {
         value = []
@@ -290,11 +438,14 @@ Object "object"
         tail = values.tail
       }
       return {
+        type: 'object',
         valueType: 'object',
         value,
         wsBegin,
         tail,
         string: text(),
+        start,
+        end,
       }
     }
 
@@ -321,12 +472,16 @@ Array "array"
       head:ArrayValue wsAfter:ws01Array
       middles:(ArraySeperator wsBefore_m:ws10Array v:ArrayValue wsAfter_m:ws01Array
         {
+          let {start,end} = pos()
+          v.inside = 'array'
           return {
             type:'arrayItem',
             wsBefore: wsBefore_m,
             wsAfter: wsAfter_m,
             value: v,
             string: text(),
+            start,
+            end,
           }
         }
       )*
@@ -334,16 +489,18 @@ Array "array"
         ArraySeperator ws01Array { return text() }
       )?
       {
+        head.inside = 'array'
         let headItem = {
           type: 'arrayItem',
-          wsBefore: null,
           wsAfter,
           value: head,
           string: head.string+wsAfter,
+          start: head.start,
+          end: head.end + wsAfter.length,
           index: 0,
         }
         for (let index=1; index<=middles.length; index+=1) {
-          middles.index = index
+          middles[index-1].index = index
         }
         return {
           values: [headItem].concat(middles),
@@ -353,6 +510,7 @@ Array "array"
     )?
     ArrayEnd
     {
+      let {start,end} = pos()
       let value, tail
       if (values === null) {
         value = []
@@ -362,11 +520,14 @@ Array "array"
         tail = values.tail
       }
       return {
+        type: 'array',
         valueType: 'array',
         value,
         wsBegin,
         tail,
         string: text(),
+        start,
+        end,
       }
     }
 
@@ -380,18 +541,22 @@ Pair "pair"
 
 PairComplete
   = key:Key wsBefore:ws PairSeperator wsAfter:ws value:ValuePair {
+    let {start,end} = pos()
     return {
       type: 'pair',
       subtype: 'complete',
       key,
-      value,
       wsBefore,
       wsAfter: wsAfter,
+      value,
       string: text(),
+      start,
+      end,
     }
   }
 PairMissValue
   = key:Key wsBefore:ws PairSeperator wsAfter:sws? {
+    let {start,end} = pos()
     return {
       type: 'pair',
       subtype: 'missingValue',
@@ -402,8 +567,12 @@ PairMissValue
         valueType: 'string',
         value: "",
         string: "",
+        start: end,
+        end: end,
       },
       string: text(),
+      start,
+      end,
     }
   }
 
@@ -414,10 +583,13 @@ PairSeperator
 Key "key"
   = key:KeyValue
     {
+      let {start,end} = pos()
       return {
         type: 'key',
         value: key,
         string: text(),
+        start,
+        end,
       }
     }
 
@@ -426,12 +598,15 @@ KeyValue "keyValue"
   / SimpleString
 
 SimpleString "simpleString"
-  = prefix:[0-9a-zA-Z_$<>=+\-] suffix:[0-9a-zA-Z_$.<>+\-=|]*
+  = prefix:[0-9a-zA-Z_$<>=+\-@] suffix:[0-9a-zA-Z_$.<>+\-=|@]*
     {
+      let {start,end} = pos()
       return {
         valueType: 'simpleString',
         value: prefix + suffix.join(""),
         string: text(),
+        start,
+        end,
       }
     }
 
@@ -463,9 +638,18 @@ SimpleValue 'simplevalue'
   / RegularExpression
 
 
-false = "false" { return {valueType: 'bool', value:false, string:'false'} }
-null  = "null"  { return {valueType: 'null', value:null, string:'null'} }
-true  = "true"  { return {valueType: 'bool', value:true, string:'true'}  }
+false = "false" {
+    let {start,end} = pos()
+    return {valueType: 'bool', value:false, string:'false', start, end}
+  }
+null  = "null"  {
+    let {start,end} = pos()
+    return {valueType: 'null', value:null, string:'null', start, end}
+  }
+true  = "true"  {
+    let {start,end} = pos()
+    return {valueType: 'bool', value:true, string:'true', start, end}
+  }
 
 // ----- Numbers ----- from https://github.com/pegjs/pegjs/blob/master/examples/json.pegjs
 
@@ -473,10 +657,13 @@ DIGIT  = [0-9]
 
 Number "number"
   = minus? int frac? exp? {
+    let {start,end} = pos()
     return {
       valueType: 'number',
       value: Number(text()),
       string: text(),
+      start,
+      end,
     }
   }
 
@@ -511,17 +698,23 @@ zero
 
 String "string"
   = '"' chars:DoubleStringCharacter* '"' {
+      let {start,end} = pos()
       return {
         valueType: "string",
         value: chars.join(""),
         string: text(),
+        start,
+        end,
       }
     }
   / "'" chars:SingleStringCharacter* "'" {
+      let {start,end} = pos()
       return {
         valueType: "string",
         value: chars.join(""),
         string: text(),
+        start,
+        end,
       }
     }
 
@@ -608,10 +801,13 @@ RegularExpression "regular expression"
         error(e.message);
       }
 
+      let {start,end} = pos()
       return {
         valueType: 'regexp',
         value,
         string: text(),
+        start,
+        end,
       }
     }
 
