@@ -439,7 +439,6 @@ Object "object"
       }
       return {
         type: 'object',
-        valueType: 'object',
         value,
         wsBegin,
         tail,
@@ -521,7 +520,6 @@ Array "array"
       }
       return {
         type: 'array',
-        valueType: 'array',
         value,
         wsBegin,
         tail,

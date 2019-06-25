@@ -464,7 +464,6 @@ function peg$parse(input, options) {
             }
             return {
               type: 'object',
-              valueType: 'object',
               value,
               wsBegin,
               tail,
@@ -529,7 +528,6 @@ function peg$parse(input, options) {
             }
             return {
               type: 'array',
-              valueType: 'array',
               value,
               wsBegin,
               tail,
