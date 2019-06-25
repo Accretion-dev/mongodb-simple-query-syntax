@@ -21,6 +21,18 @@ class Parser {
   constructor ({tree, options}) {
     this.tree = tree
     this.options = options || {}
+    this.fullTreePath = new Map()
+    this.getFullTreePath(this.tree, this.fullTreePath)
+    this.fullTreePathList = Array.from(this.fullTreePath.keys()).filter(_ => _)
+    this.topLevelPath = this.fullTreePathList.filter(_ => !(_.includes('@')||_.includes('.')||_.includes('>')))
+  }
+  getFullTreePath (tree, paths) {
+    paths.set(tree.path, tree)
+    if (tree.children) {
+      for (let child of tree.children) {
+        this.getFullTreePath(child, paths)
+      }
+    }
   }
   parse (content) {
     let result
@@ -92,9 +104,12 @@ class Parser {
     this.trace = this.trace.reverse()
     console.log({cursor, result: this.result, trace: this.trace})
     let trace = this.trace[0]
-    let result, completeData, completeType, start, end, string, range
+    let result, completeData, completeType, start, end, string, range, options
+    options = {}
     if (!trace.type) { // inside a value
-      range = {start: trace.start, end: trace.end-1, color: 'rgba(0,255,0,0.2)'}
+      completeType = 'replace'
+      string = trace.string
+      range = {start: trace.start, end: trace.end, color: 'rgba(0,255,0,0.2)'}
       completeData = [
         {
           group: `replacing: ${trace.valueType}`,
@@ -102,28 +117,52 @@ class Parser {
         }
       ]
     } else { // in some ws
+      completeType = 'insert'
       range = null
       completeData = [ ]
+      string = ""
       if (trace.type === 'pair' && trace.subtype === 'complete' && cursor > trace.key.end && cursor < trace.value.start) {
         // no complete not between key: value
       } else if (trace.badPositions && trace.badPositions.includes(cursor)) {
         // no complete not between "&&" nad "||"
       } else if (['nested', 'array', 'object'].includes(trace.type) && (cursor===trace.start || cursor===trace.end)) {
-        range = {start: trace.start, end: trace.end-1, color: 'rgba(0,255,0,0.2)'} // only show the range, no complete
+        range = {start: trace.start, end: trace.end, color: 'rgba(0,255,0,0.2)'} // only show the range, no complete
       } else {
         range = {start: cursor, end: cursor}
-        completeData = [
-          {
-            group: `inserting: ${trace.type}`,
-            always: true,
+        if (['root', 'andItem', 'orItem', 'objectItem', 'arrayItem'].includes(trace.type)) {
+          completeData = [
+            {
+              group: `commands`,
+              data: [
+                {data: '@js', description: 'arbitary js code'},
+                {data: '@and', description: 'and logical structure'},
+                {data: '@or', description: 'or logical structure'},
+                {data: '@not', description: 'not logical structure'},
+              ]
+            },
+            {
+              group: `paths`,
+              data: this.topLevelPath,
+            }
+          ]
+          options = {
+            maxDrop: 10
           }
-        ]
+        } else {
+          completeData = [
+            {
+              group: `inserting: ${trace.type}`,
+              always: true,
+            }
+          ]
+        }
       }
     }
     result = {
       range,
-      string: trace.string,
+      string,
       completeData,
+      options,
     }
     return result
   }
