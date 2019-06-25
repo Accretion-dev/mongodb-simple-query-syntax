@@ -106,7 +106,11 @@ class Parser {
     let trace = this.trace[0]
     let result, completeData, completeType, start, end, string, range, options
     options = {}
-    if (!trace.type) { // inside a value
+    if (!trace) {
+      range = null
+      completeData = [ ]
+      string = ""
+    } else if (!trace.type) { // inside a value
       completeType = 'replace'
       string = trace.string
       range = {start: trace.start, end: trace.end, color: 'rgba(0,255,0,0.2)'}
