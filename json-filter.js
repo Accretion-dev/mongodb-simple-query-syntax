@@ -207,7 +207,11 @@ class Parser {
         }
         if (trueValueType) {
           let thisExtraData = []
-          extraData.group = `${trueValueType.type}: [${completeKeyFull}]`
+          if (value.includes('>')) {
+            extraData.group = `[${trueValueType.type}]: ${completeKeyFull} `
+          } else {
+            extraData.group = `${trueValueType.type}: ${completeKeyFull} `
+          }
           let completeKeyPrefixs = [
             `${completeKey}`,
           ]
@@ -317,10 +321,22 @@ class Parser {
           },
         ]
       } else if (key.endsWith('@len') || key.endsWith('@wlen')) {
+        let data = [
+          'examples:',
+          '  >number',
+          '  <number',
+          '  >=number',
+          '  <=number',
+          '  ==number',
+        ]
         completeData = [
           {
             group: `number filter`,
-            always: true
+            noComplete: true,
+            itemAlways: true,
+            noSort: true,
+            data,
+            always: true,
           },
         ]
       } else if (key.endsWith('@js')) {
@@ -345,9 +361,43 @@ class Parser {
           } else {
             length = 'undefined'
           }
+          let comment, data
+          if ('number' === trueValueType.type) {
+            comment = `number filter`
+            data = [
+              'examples:',
+              '  >number',
+              '  <number',
+              '  >=number',
+              '  <=number',
+              '  ==number',
+            ]
+          } else if ('date' === trueValueType.type) {
+            comment = `date filter`
+            data = [
+              'examples:',
+              {data: '  >YYYY-MM-DDThh:mm:ss', description: ' later than timestamp'},
+              {data: '  >MM-DD', description: ' later than date'},
+              {data: '  >mm:ss', description: ' later than time (and in any day)'},
+              {data: '  >:weekday:D', description: ' later than weekday D'},
+              {data: '  >-?h', description: ' later than ? unit before, units: yMdhms'},
+              {data: '  in:YYYY', description: ' in year YYYY'},
+              {data: '  in:YYYY-MM-DD', description: ' in day YYYY-MM-DD'},
+              {data: '  in:weekday:D', description: ' in weekday D'},
+              {data: '  in:year:YYYY', description: ' in year YYYY'},
+              {data: '  in:month:MM', description: ' in month MM'},
+              {data: '  in:day:DD', description: ' in day DD'},
+            ]
+          } else {
+            comment = trueValueType.type
+          }
           completeData = [
             {
-              group: `type: ${trueValueType.type} (${length})`,
+              group: `${comment} (${length})`,
+              noComplete: true,
+              itemAlways: true,
+              noSort: true,
+              data,
               always: true
             },
           ]
@@ -370,7 +420,7 @@ class Parser {
     if (cursor === null) {
       // from getContext, root section
       let completeData
-      let options = {maxDrop: 15}
+      let options = {maxDrop: 0}
       completeData = [
         {
           group: `commands`,
@@ -419,6 +469,7 @@ class Parser {
       */
     } else { // in some ws
       completeType = 'insert'
+      options.maxDrop = 0
       range = null
       string = ""
       if (trace.type === 'pair' && trace.subtype === 'complete' && cursor > trace.key.end && cursor < trace.value.start) {
@@ -433,36 +484,6 @@ class Parser {
         range = {start: trace.start, end: trace.end, color: 'rgba(0,255,0,0.2)'}
       } else {
         range = {start: cursor, end: cursor}
-        // insert top level expresion
-        /*
-        if (['root', 'andItem', 'orItem', 'objectItem', 'arrayItem'].includes(trace.type)) {
-          completeData = [
-            {
-              group: `commands`,
-              data: [
-                {data: '@js', description: 'arbitary js code'},
-                {data: '@and', description: 'and logical structure'},
-                {data: '@or', description: 'or logical structure'},
-                {data: '@not', description: 'not logical structure'},
-              ]
-            },
-            {
-              group: `paths`,
-              data: this.topLevelPath,
-            }
-          ]
-          options = {
-            maxDrop: 10
-          }
-        } else {
-          completeData = [
-            {
-              group: `inserting: ${trace.type}`,
-              always: true,
-            }
-          ]
-        }
-        */
       }
     }
     console.log({cursor, keys, keyPrefix, type, string, completeData, options, trace})

@@ -119,6 +119,8 @@ ValueBlock "value"
       return function(input) {return input>num}
     } else if (op === '<') {
       return function(input) {return input<num}
+    } else if (op === '==') {
+      return function(input) {return input==num}
     }
   }
 
@@ -127,6 +129,7 @@ OP "op"
   / '<='
   / '>'
   / '<'
+  / '=='
 
 DIGIT  = [0-9]
 
