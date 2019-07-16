@@ -219,6 +219,11 @@ class Parser {
           }
           if (trueValueType.type === 'array' || trueValueType.type === 'object') {
             for (let completeKeyPrefix of completeKeyPrefixs) {
+              if (trueValueType.type === 'array') {
+                thisExtraData = thisExtraData.concat([
+                  {data: `${completeKeyPrefix}>`, description: 'js filter for obj length'},
+                ])
+              }
               thisExtraData = thisExtraData.concat([
                 {data: `${completeKeyPrefix}|js: ""`, description: 'js filter for obj length', cursorOffset: -1},
                 {data: `${completeKeyPrefix}|len: ""`, description: 'number filter obj length', cursorOffset: -1},
@@ -255,7 +260,7 @@ class Parser {
           } else if (trueValueType.type === 'mixed') {
             for (let completeKeyPrefix of completeKeyPrefixs) {
               thisExtraData = thisExtraData.concat([
-                {data: `${completeKeyPrefix}@: `, description: ''},
+                {data: `${completeKeyPrefix}@`, description: ''},
                 {data: `${completeKeyPrefix}|js: ""`, description: 'js filter for number', cursorOffset: -1},
                 {data: `${completeKeyPrefix}|exists: `, description: ''},
               ])
@@ -360,11 +365,39 @@ class Parser {
     return {type, string:value, completeData, keys, keyPrefix}
   }
   analysis (cursor) {
+    let options = {maxDrop: 15}
     if (!this.result) throw Error('should do parse first!')
+    if (cursor === null) {
+      // from getContext, root section
+      let completeData
+      let options = {maxDrop: 15}
+      completeData = [
+        {
+          group: `commands`,
+          data: [
+            {data: '@js', description: 'arbitary js code'},
+            {data: '@and', description: 'and logical structure'},
+            {data: '@or', description: 'or logical structure'},
+            {data: '@not', description: 'not logical structure'},
+          ]
+        },
+        {
+          group: `keys`,
+          data: this.topLevelPath,
+          always: true,
+        }
+      ]
+      result = {
+        range: null,
+        string: '',
+        completeData,
+        options,
+      }
+      return result
+    }
     this.trace = []
     this.getCursorObjects(cursor, this.result, this.trace)
     this.trace = this.trace.reverse()
-    let options = {maxDrop: 30}
     let {type, string, completeData, keys, keyPrefix} = this.getContext(this.trace)
     let trace = this.trace[0]
     let result, completeType, start, end, range
