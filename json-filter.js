@@ -57,25 +57,6 @@ class Parser {
     this.result = result
     this.error = null
   }
-  _simpleResult (tree) {
-    if (!tree.type && !tree.valueType) return tree
-    let result = {}
-    //if (tree.string) result.string = tree.string
-    if (tree.type) result.type = tree.type
-    if (tree.key) result.key = this._simpleResult(tree.key)
-    if (tree.valueType) result.valueType = tree.valueType
-    if (tree.value) {
-      if (Array.isArray(tree.value)) {
-        result.value = tree.value.map(_ => this._simpleResult(_))
-      } else {
-        result.value = this._simpleResult(tree.value)
-      }
-    }
-    return result
-  }
-  simpleResult () {
-    return this._simpleResult(this.result)
-  }
   getCursorObjects (cursor, tree, trace) {
     if (tree.start<=cursor && cursor<=tree.end) {
       if (trace.length&&trace[trace.length-1].end===tree.start) return
@@ -494,6 +475,40 @@ class Parser {
       options,
     }
     return result
+  }
+  static _simpleResult (tree) {
+    if (!tree.type && !tree.valueType) return tree
+    let result = {}
+    //if (tree.string) result.string = tree.string
+    if (tree.type) result.type = tree.type
+    if (tree.key) result.key = this._simpleResult(tree.key)
+    if (tree.valueType) result.valueType = tree.valueType
+    if (tree.subtype) result.subtype = tree.subtype
+    if (tree.value) {
+      if (Array.isArray(tree.value)) {
+        result.value = tree.value.map(_ => this._simpleResult(_))
+      } else {
+        result.value = this._simpleResult(tree.value)
+      }
+    }
+    return result
+  }
+  static simpleResult (tree) {
+    return this._simpleResult(tree)
+  }
+  static _getFilter (tree) { // return the filter function
+    return tree
+  }
+  static getFilter (content) { // return the filter function
+    let filter
+    try {
+      filter = JsonParse(content)
+    } catch (error) {
+      return {filter: _=>true, error}
+    }
+    filter = this.simpleResult(filter)
+    filter = this._getFilter(filter)
+    return {filter}
   }
 }
 

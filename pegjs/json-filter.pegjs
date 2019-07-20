@@ -46,15 +46,17 @@
     }
     return tree.string
   }
-  function updateIndex (tree, deep) {
-
-  }
 }
+/* type and subtypes
+root:
+  subtype: empty, or, and, nested, pair
+none(is valye):
+  valueType, value
 
+*/
 start
   = StartOR
   / StartAND
-  / StartNOT
   / StartValue
   / Empty
 
@@ -103,20 +105,6 @@ StartAND "startand"
       string: text(),
       start,
       end
-    }
-  }
-StartNOT "startnot"
-  = wsBegin:ws10 v:NOT wsEnd:ws01 {
-    let {start,end} = pos()
-    return {
-      type: 'root',
-      subtype: 'not',
-      wsBegin,
-      wsEnd,
-      value: v,
-      string: text(),
-      start,
-      end,
     }
   }
 StartValue "startvalue"
@@ -244,7 +232,28 @@ AND "and"
 
 ANDBlock "andblock"
   = AND
-  / NOTBlock
+  / v:NOTBlock {
+    let {start,end} = pos()
+    return {
+      type: 'and',
+      value: [
+        {
+          type: 'andItem',
+          wsBefore: "",
+          delimiter: "",
+          wsAfter: "",
+          value: v,
+          string: v.string,
+          start: v.start,
+          end: v.end,
+          index: 0,
+        }
+      ],
+      string: text(),
+      start,
+      end,
+    }
+  }
 
 NOTBlock "notblock"
   = NOT
@@ -271,7 +280,22 @@ Block "block"
   / ValueBlock
 
 NestedBlock 'nestedblock'
-  = nestedStart wsBefore:ws10 v:OR wsAfter:ws01 nestedEnd
+  = nestedStart wsBefore:ws10 v:NestedBlock wsAfter:ws01 nestedEnd
+    {
+      let {start,end} = pos()
+      v.inside = 'nested'
+      return {
+        type: 'nested',
+        subtype: 'nested',
+        wsBefore,
+        wsAfter,
+        value: v,
+        string: text(),
+        start,
+        end,
+      }
+    }
+  / nestedStart wsBefore:ws10 v:OR wsAfter:ws01 nestedEnd
     {
       let {start,end} = pos()
       v.inside = 'nested'
@@ -292,22 +316,7 @@ NestedBlock 'nestedblock'
       v.inside = 'nested'
       return {
         type: 'nested',
-        subtype: 'or',
-        wsBefore,
-        wsAfter,
-        value: v,
-        string: text(),
-        start,
-        end,
-      }
-    }
-  / nestedStart wsBefore:ws10 v:NOT wsAfter:ws01 nestedEnd
-    {
-      let {start,end} = pos()
-      v.inside = 'nested'
-      return {
-        type: 'nested',
-        subtype: 'not',
+        subtype: 'and',
         wsBefore,
         wsAfter,
         value: v,
